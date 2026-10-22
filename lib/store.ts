@@ -426,6 +426,19 @@ export function unconfirmRecord(code: string, period: string, now: Date = new Da
   });
 }
 
+/** 지표별로 저장된 모든 기간의 수치를 최신 순으로 돌려준다. 12개월 화면에 쓴다. 확정 전 값은 "미확정"으로 들어 있다. */
+export function listRecordsByIndicator(): Promise<Record<string, CollectItem[]>> {
+  return readOnly((file) => {
+    const result: Record<string, CollectItem[]> = {};
+    for (const indicator of INDICATORS) result[indicator.code] = [];
+    for (const record of Object.values(file.records)) {
+      if (record.code in result) result[record.code].push(toItem(record));
+    }
+    for (const items of Object.values(result)) items.sort((a, b) => (b.period ?? "").localeCompare(a.period ?? ""));
+    return result;
+  });
+}
+
 /** 확정된 수치의 한 점. 그래프에 쓴다. */
 export interface ConfirmedPoint {
   period: string;

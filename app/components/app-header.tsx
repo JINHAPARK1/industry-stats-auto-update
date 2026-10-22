@@ -5,7 +5,7 @@ import SearchBox from "./search-box";
 
 interface AppHeaderProps {
   /** 지금 보고 있는 화면. 이동 링크에서 강조한다. */
-  current: "monthly" | "charts";
+  current: "monthly" | "months" | "charts";
 }
 
 const LINK_BASE = "rounded-full px-4 py-2 text-base font-medium";
@@ -20,6 +20,9 @@ export default function AppHeader({ current }: AppHeaderProps) {
         <nav aria-label="화면 이동" className="flex items-center gap-2">
           <Link href="/" aria-current={current === "monthly" ? "page" : undefined} className={`${LINK_BASE} ${current === "monthly" ? active : idle}`}>
             월간 통계
+          </Link>
+          <Link href="/months" aria-current={current === "months" ? "page" : undefined} className={`${LINK_BASE} ${current === "months" ? active : idle}`}>
+            12개월
           </Link>
           <Link href="/charts" aria-current={current === "charts" ? "page" : undefined} className={`${LINK_BASE} ${current === "charts" ? active : idle}`}>
             그래프

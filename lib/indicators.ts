@@ -41,8 +41,11 @@ export interface Indicator {
   periodCount: number;
 }
 
-/** 월간 지표는 전년동월 대비를 계산하려고 최근 13개월을 가져온다. (PRD 6번) */
-const MONTHLY_COUNT = 13;
+/** 월간 지표는 최근 12개월을 보여주고 각 달의 전년동월 대비를 계산하려고 24개월을 가져온다. (PRD 6번) */
+const MONTHLY_COUNT = 24;
+
+/** 화면에 보여주고 저장하는 월간 기간 수(직전 12개월) */
+export const DISPLAY_MONTHS = 12;
 /** 연간 지표는 최근 3개년을 가져온다. (PLAN 3번) */
 const ANNUAL_COUNT = 3;
 

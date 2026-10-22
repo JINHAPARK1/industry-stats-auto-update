@@ -171,6 +171,21 @@ export interface SearchResponse {
   items: CollectItem[];
 }
 
+/** 12개월 화면에 쓰는 지표 하나의 기간별 수치(최신 순). 확정 전 값도 "미확정"으로 들어 있다. */
+export interface MonthsIndicator {
+  code: string;
+  name: string;
+  field: string;
+  frequency: "M" | "Y";
+  unit: string;
+  items: CollectItem[];
+}
+
+/** 12개월 API의 정상 응답. 지표 10개가 지표 정의 순서대로 들어 있다. */
+export interface MonthsResponse {
+  indicators: MonthsIndicator[];
+}
+
 /** API의 오류 응답 */
 export interface ApiErrorBody {
   error: { code: string; message: string };

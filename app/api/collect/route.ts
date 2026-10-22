@@ -6,7 +6,7 @@
 // 접속 확인: proxy.ts가 1차로, 이 API가 `requireLogin`으로 한 번 더 확인한다. (PLAN 8번)
 // 저장에 실패해도 가져온 수치는 화면에 보여주고, saved=false와 사유(saveError)를 함께 돌려준다.
 import { requireLogin } from "@/lib/auth";
-import { INDICATORS } from "@/lib/indicators";
+import { DISPLAY_MONTHS, INDICATORS } from "@/lib/indicators";
 import { collectIndicators, getLatestPoint } from "@/lib/kosis";
 import type { IndicatorPoint, IndicatorSeries } from "@/lib/kosis";
 import { StoreError, getStoredView, saveCollected } from "@/lib/store";
@@ -167,13 +167,36 @@ export async function POST(request: Request): Promise<Response> {
       };
     });
 
+    // 지표마다 최근 12개월(연간은 가져온 전부)의 앞선 달 값도 "미확정"으로 함께 저장한다. 확정은 12개월 화면에서 달마다 한다.
+    const earlier: CollectItem[] = [];
+    for (const result of collected.results) {
+      if (result.status !== "ok") continue;
+      const { series } = result;
+      const latest = getLatestPoint(series);
+      if (!latest) continue;
+      const shown = series.frequency === "M" ? series.points.slice(-DISPLAY_MONTHS) : series.points;
+      for (const point of shown) {
+        if (point.period === latest.period || point.value === null) continue;
+        earlier.push({
+          ...emptyItem(series, "unconfirmed"),
+          period: point.period,
+          value: point.value,
+          originalValue: point.value,
+          unit: point.unit,
+          source: point.source,
+          lastChangedAt: point.lastChangedAt,
+          variation: toVariationView(series, point),
+        });
+      }
+    }
+
     // 가져온 수치를 "미확정"으로 저장한다. 이미 확정한 수치는 저장소가 값을 지켜 주므로, 저장된 모양으로 다시 읽어 보여준다.
     let finalItems = items;
     let saved = false;
     let saveError: string | null = null;
     let storedMonths: string[] = [];
     try {
-      await saveCollected(items);
+      await saveCollected([...items, ...earlier]);
       const view = await getStoredView(targetMonth ?? undefined);
       finalItems = items.map((item) =>
         item.state === "unconfirmed"
