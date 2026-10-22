@@ -11,7 +11,7 @@ import { collectIndicators, getLatestPoint } from "@/lib/kosis";
 import type { IndicatorPoint, IndicatorSeries } from "@/lib/kosis";
 import { StoreError, getStoredView, saveCollected } from "@/lib/store";
 import { calcVariation } from "@/lib/variation";
-import { NO_STORE, errorResponse } from "@/lib/api-response";
+import { NO_STORE, errorResponse, rejectUnsafeRequest } from "@/lib/api-response";
 import type { CollectItem, CollectResponse, ItemState, VariationView } from "@/lib/collect-types";
 
 /** 지금 가져오는 중인지. 여러 명이 동시에 누르는 것을 막는 간단한 장치다. (서버가 여러 대이면 완전하지 않다) */
@@ -100,6 +100,8 @@ function emptyItem(series: Pick<IndicatorSeries, "code" | "name" | "field" | "fr
 export async function POST(request: Request): Promise<Response> {
   const denied = await requireLogin(request);
   if (denied) return denied;
+  const unsafe = rejectUnsafeRequest(request);
+  if (unsafe) return unsafe;
 
   const parsed = await parseRequest(request);
   if (parsed instanceof Response) return parsed;

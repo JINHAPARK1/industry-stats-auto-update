@@ -2,7 +2,7 @@
 // Plan SC: PLAN 11번 — 고친 값은 원래 값과 함께 이력에 남기고, 확정 취소·재확정도 이력에 남긴다.
 // Plan SC: PLAN 14번 — 확정 전 수치는 서식·검색·그래프에 반영하지 않는다. (확정된 수치만 저장소에서 "확정" 상태가 된다)
 import { requireLogin } from "@/lib/auth";
-import { NO_STORE, errorResponse, storeErrorResponse } from "@/lib/api-response";
+import { NO_STORE, errorResponse, rejectUnsafeRequest, storeErrorResponse } from "@/lib/api-response";
 import type { ConfirmResponse } from "@/lib/collect-types";
 import { INDICATORS } from "@/lib/indicators";
 import { confirmRecord, unconfirmRecord } from "@/lib/store";
@@ -61,6 +61,8 @@ async function parseRequest(request: Request): Promise<ConfirmRequest | Response
 export async function POST(request: Request): Promise<Response> {
   const denied = await requireLogin(request);
   if (denied) return denied;
+  const unsafe = rejectUnsafeRequest(request);
+  if (unsafe) return unsafe;
 
   const parsed = await parseRequest(request);
   if (parsed instanceof Response) return parsed;

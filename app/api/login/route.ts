@@ -21,6 +21,11 @@ export async function POST(request: Request): Promise<Response> {
     return authErrorResponse(503, "auth-not-configured", "접속 설정이 되어 있지 않습니다. 운영자에게 알려 주세요.");
   }
 
+  const length = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(length) && length > 10_000) {
+    return authErrorResponse(413, "too-large", "요청 내용이 너무 큽니다.");
+  }
+
   let password: unknown;
   try {
     password = ((await request.json()) as { password?: unknown } | null)?.password;
@@ -32,6 +37,8 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   if (!(await verifyPassword(password))) {
+    // 틀린 시도가 있었다는 사실만 남긴다. 입력한 비밀번호는 절대 남기지 않는다.
+    console.warn(`[login] 비밀번호가 틀린 접속 시도 ${new Date().toISOString()}`);
     await new Promise((resolve) => setTimeout(resolve, WRONG_PASSWORD_DELAY_MS));
     return authErrorResponse(401, "wrong-password", "비밀번호가 맞지 않습니다.");
   }

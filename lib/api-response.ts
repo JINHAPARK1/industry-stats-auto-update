@@ -2,6 +2,7 @@
 import "server-only";
 
 import type { ApiErrorBody } from "./collect-types";
+import { isSameOrigin } from "./auth";
 import { StoreError } from "./store";
 import type { StoreErrorKind } from "./store";
 
@@ -33,4 +34,22 @@ export function storeErrorResponse(error: unknown): Response {
     return errorResponse(STORE_ERROR_STATUS[error.kind], `store-${error.kind}`, error.message);
   }
   return errorResponse(500, "unknown", "처리하지 못했습니다. 잠시 뒤 다시 시도해 주세요.");
+}
+
+/** 수치를 바꾸는 요청에 허용하는 본문 크기(바이트). 정상 요청은 수백 바이트면 충분하다. */
+const MAX_BODY_BYTES = 10_000;
+
+/**
+ * 수치를 바꾸는 요청(가져오기·확정)을 읽기 전에 점검한다.
+ * 다른 사이트에서 온 요청이거나 본문이 비정상적으로 크면 거절 응답을, 문제없으면 null을 돌려준다.
+ */
+export function rejectUnsafeRequest(request: Request): Response | null {
+  if (!isSameOrigin(request)) {
+    return errorResponse(403, "bad-origin", "허용되지 않은 곳에서 온 요청입니다.");
+  }
+  const length = Number(request.headers.get("content-length") ?? 0);
+  if (Number.isFinite(length) && length > MAX_BODY_BYTES) {
+    return errorResponse(413, "too-large", "요청 내용이 너무 큽니다.");
+  }
+  return null;
 }

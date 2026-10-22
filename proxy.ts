@@ -34,5 +34,5 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // 화면 파일(_next/static, _next/image)과 탭 아이콘만 빼고 모든 요청을 확인한다. API도 포함한다.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static/|_next/image/|favicon\.ico$).*)"],
 };

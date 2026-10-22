@@ -124,7 +124,8 @@ class FileBackend implements StoreBackend {
  */
 function getBackend(): StoreBackend {
   const mode = process.env.STORE_BACKEND ?? (process.env.NODE_ENV === "production" ? "" : "file");
-  if (mode === "file") return new FileBackend();
+  // 운영(Vercel)에서는 파일 저장이 사라지거나 실패하므로 파일 저장소를 쓰지 못하게 막는다.
+  if (mode === "file" && process.env.NODE_ENV !== "production") return new FileBackend();
   throw new StoreError("not-configured", "저장소가 설정되지 않았습니다. 운영자에게 알려 주세요.");
 }
 
