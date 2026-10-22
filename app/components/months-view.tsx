@@ -4,7 +4,7 @@
 // 확정 전 값은 "미확정"으로 표시한다. 그래프·검색·서식에는 확정된 값만 쓰인다.
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { ApiErrorBody, CollectItem, MonthsIndicator, MonthsResponse } from "@/lib/collect-types";
+import type { ApiErrorBody, BatchConfirmResponse, CollectItem, MonthsIndicator, MonthsResponse } from "@/lib/collect-types";
 import DetailPanel from "./detail-panel";
 import { formatPeriod, formatValue } from "./format";
 
@@ -43,6 +43,9 @@ export default function MonthsView() {
   const [data, setData] = useState<MonthsIndicator[] | null>(null);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState<{ code: string; period: string } | null>(null);
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const [batchNote, setBatchNote] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -81,6 +84,42 @@ export default function MonthsView() {
     return data.find((i) => i.code === selected.code)?.items.find((item) => item.period === selected.period) ?? null;
   }, [data, selected]);
 
+  // 한 번에 확정할 수 있는 수치: 확정 전이고 이상치가 아닌 모든 달·연도. (이상치는 하나씩 원 통계표와 대조해 확정한다)
+  const batchCandidates = useMemo(
+    () => (data ?? []).flatMap((i) => i.items.filter((item) => item.state === "unconfirmed" && item.period && !item.variation?.isOutlier)),
+    [data],
+  );
+  const outlierCount = useMemo(
+    () => (data ?? []).flatMap((i) => i.items).filter((item) => item.state === "unconfirmed" && item.variation?.isOutlier).length,
+    [data],
+  );
+
+  /** 목록을 사람이 확인한 뒤 이상치가 아닌 수치를 한 번에 확정한다. 이상치는 서버도 한 번 더 걸러 낸다. */
+  async function confirmBatch() {
+    setBatchBusy(true);
+    setBatchNote("");
+    try {
+      const response = await fetch("/api/confirm-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: batchCandidates.map((item) => ({ code: item.code, period: item.period })) }),
+      });
+      if (response.status === 401) return goToLogin();
+      const body = (await response.json().catch(() => null)) as BatchConfirmResponse | ApiErrorBody | null;
+      if (!response.ok || !body || !("confirmed" in body)) {
+        setBatchNote(body && "error" in body ? body.error.message : "확정하지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
+        return;
+      }
+      setBatchNote(`${body.confirmed.length}개를 확정했습니다.${body.skipped.length > 0 ? ` ${body.skipped.length}개는 건너뛰었습니다.` : ""}`);
+      setBatchOpen(false);
+      await load();
+    } catch {
+      setBatchNote("연결에 문제가 있습니다. 잠시 뒤 다시 눌러 주세요.");
+    } finally {
+      setBatchBusy(false);
+    }
+  }
+
   if (error) return <p role="alert" className="rounded-xl border border-red-300 bg-red-50 p-4 text-red-800">{error}</p>;
   if (!data) return <p className="text-lg text-zinc-500">불러오는 중입니다.</p>;
   if (periods.length === 0 && yearly.every((i) => i.items.length === 0)) {
@@ -96,6 +135,64 @@ export default function MonthsView() {
       <p className="text-base text-zinc-600 dark:text-zinc-400">
         칸을 누르면 그 달을 확인하고 확정할 수 있습니다. 확정 전 수치는 이 화면에만 보이며, 그래프·검색·서식에는 확정한 수치만 쓰입니다.
       </p>
+
+      {batchCandidates.length > 0 && (
+        <div className="rounded-xl border border-green-600 bg-white p-4 dark:border-green-700 dark:bg-zinc-900">
+          <button
+            type="button"
+            onClick={() => setBatchOpen((open) => !open)}
+            aria-expanded={batchOpen}
+            disabled={batchBusy}
+            className="h-12 rounded-full border border-green-600 px-6 text-lg font-medium text-green-800 hover:bg-green-50 disabled:opacity-60 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-950"
+          >
+            이상치 아닌 수치 한 번에 확정 ({batchCandidates.length}개)
+          </button>
+          {batchOpen && (
+            <div className="mt-3">
+              <p className="text-base font-semibold text-black dark:text-zinc-50">
+                아래 {batchCandidates.length}개를 KOSIS 값 그대로 확정합니다. 각 지표의 수치가 원 통계표와 맞는지 훑어본 뒤 눌러 주세요.
+              </p>
+              <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                이상치(⚠) {outlierCount}개는 여기에 없습니다. 칸을 눌러 하나씩 원 통계표와 대조해 확정해 주세요.
+              </p>
+              <ul className="mt-3 divide-y divide-zinc-200 text-base dark:divide-zinc-800">
+                {(data ?? []).map((indicator) => {
+                  const list = indicator.items.filter((item) => item.state === "unconfirmed" && item.period && !item.variation?.isOutlier);
+                  if (list.length === 0) return null;
+                  const periods = list.map((item) => item.period as string).sort();
+                  return (
+                    <li key={indicator.code} className="flex flex-wrap items-baseline justify-between gap-x-4 py-1.5">
+                      <span className="font-medium text-black dark:text-zinc-50">{indicator.name}</span>
+                      <span className="tabular-nums text-zinc-700 dark:text-zinc-300">
+                        {formatPeriod(periods[0])}
+                        {periods.length > 1 ? ` ~ ${formatPeriod(periods[periods.length - 1])}` : ""} · {list.length}개
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={confirmBatch}
+                  disabled={batchBusy}
+                  className="h-11 rounded-full bg-green-700 px-6 text-base font-semibold text-white hover:bg-green-800 disabled:opacity-60"
+                >
+                  {batchBusy ? "확정하는 중..." : `목록을 확인했습니다 · ${batchCandidates.length}개 확정`}
+                </button>
+                <button type="button" onClick={() => setBatchOpen(false)} disabled={batchBusy} className="h-11 rounded-full border border-zinc-300 px-6 text-base dark:border-zinc-700">
+                  닫기
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {batchNote && (
+        <p role="status" className="rounded-lg bg-green-50 px-4 py-3 text-base text-green-900 dark:bg-green-950 dark:text-green-200">
+          {batchNote}
+        </p>
+      )}
 
       <section aria-label="월간 지표 12개월 표" className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <table className="w-full min-w-[80rem] border-collapse text-left">

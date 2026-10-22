@@ -7,7 +7,7 @@
 // 한글 서식 버튼은 서식 파일을 받아야 연결할 수 있어서 아직 눌리지 않는다. (PLAN 15~16번)
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import type { ApiErrorBody, BatchConfirmResponse, CollectItem, CollectResponse } from "@/lib/collect-types";
+import type { ApiErrorBody, BatchConfirmResponse, CollectItem, CollectResponse, MonthsResponse } from "@/lib/collect-types";
 import { INDICATORS } from "@/lib/indicators";
 import DetailPanel from "./detail-panel";
 import { countItems, formatChange, formatCollectedAt, formatPeriod, formatValue } from "./format";
@@ -98,6 +98,7 @@ export default function StatsPanel() {
   const [month, setMonth] = useState("");
   // 지금 하는 일: 가져오는 중(collect), 저장된 값을 불러오는 중(load), 없음(null)
   const [busy, setBusy] = useState<"collect" | "load" | "form" | "batch" | null>("load");
+  const [formType, setFormType] = useState<"monthly" | "trend">("monthly");
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchNote, setBatchNote] = useState("");
   const [data, setData] = useState<CollectResponse | null>(null);
@@ -190,22 +191,43 @@ export default function StatsPanel() {
 
   /** 수집 API를 부른다. codes를 주면 그 지표만 가져온다. (실패한 지표만 다시 가져올 때) */
   /** 확정된 수치로 만든 한글 서식(.hwpx)을 내려받는다. 확정한 수치가 없으면 서버가 이유를 알려 준다. */
-  async function downloadForm() {
-    // 확정하지 않은 지표는 서식에 "확정 전"으로 비어 들어간다. 모르고 받는 일이 없도록 한 번 더 묻는다.
-    const notConfirmed = tableItems.filter((item) => item.state !== "confirmed");
-    if (
-      data &&
-      notConfirmed.length > 0 &&
-      !window.confirm(
-        `확정하지 않은 지표가 ${notConfirmed.length}개 있습니다.\n이 지표는 서식에 "확정 전"으로 비어 들어갑니다.\n그래도 내려받을까요?`,
-      )
-    ) {
-      return;
+  async function downloadForm(type: "monthly" | "trend") {
+    // 확정하지 않은 수치는 서식에 빈칸으로 들어간다. 모르고 받는 일이 없도록 한 번 더 묻는다.
+    if (type === "monthly") {
+      const notConfirmed = tableItems.filter((item) => item.state !== "confirmed");
+      if (
+        data &&
+        notConfirmed.length > 0 &&
+        !window.confirm(
+          `확정하지 않은 지표가 ${notConfirmed.length}개 있습니다.\n이 지표는 서식에 "확정 전"으로 비어 들어갑니다.\n그래도 내려받을까요?`,
+        )
+      ) {
+        return;
+      }
+    } else {
+      try {
+        const months = await fetch("/api/months");
+        if (months.status === 401) return goToLogin();
+        const body = (await months.json().catch(() => null)) as MonthsResponse | null;
+        const missing =
+          body && "indicators" in body ? body.indicators.flatMap((i) => i.items).filter((item) => item.state !== "confirmed").length : 0;
+        if (
+          missing > 0 &&
+          !window.confirm(
+            `확정하지 않은 수치가 ${missing}개 있습니다.\n이 칸은 서식에 "-"로 비어 들어갑니다. (「12개월」 화면에서 확정할 수 있습니다)\n그래도 내려받을까요?`,
+          )
+        ) {
+          return;
+        }
+      } catch {
+        // 확인에 실패해도 내려받기는 진행한다. 서버가 확정된 수치만 담는다.
+      }
     }
     setError("");
+    setFormType(type);
     setBusy("form");
     try {
-      const response = await fetch("/api/form");
+      const response = await fetch(`/api/form?type=${type}`);
       if (response.status === 401) return goToLogin();
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -365,12 +387,21 @@ export default function StatsPanel() {
           )}
           <button
             type="button"
-            onClick={downloadForm}
+            onClick={() => downloadForm("monthly")}
             disabled={busy !== null}
-            title="확정한 수치만 한글 서식에 넣어 내려받습니다"
+            title="확정한 최신 수치로 지표 10개를 담은 이번 월 한글 서식을 내려받습니다"
             className="h-12 rounded-full border border-zinc-300 px-6 text-lg font-medium text-black hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-800"
           >
-            {busy === "form" ? "서식을 만드는 중..." : "한글 서식 내려받기"}
+            {busy === "form" && formType === "monthly" ? "서식을 만드는 중..." : "이번 월 한글 서식 내려받기"}
+          </button>
+          <button
+            type="button"
+            onClick={() => downloadForm("trend")}
+            disabled={busy !== null}
+            title="확정한 수치로 지표별 직전 12개월 흐름을 담은 시계열 추이 한글 서식을 내려받습니다"
+            className="h-12 rounded-full border border-zinc-300 px-6 text-lg font-medium text-black hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-800"
+          >
+            {busy === "form" && formType === "trend" ? "서식을 만드는 중..." : "시계열 추이 한글 서식 내려받기"}
           </button>
         </div>
 
