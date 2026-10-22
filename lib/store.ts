@@ -450,6 +450,40 @@ export function listConfirmedSeries(code: string): Promise<ConfirmedPoint[]> {
   );
 }
 
+/** 모든 지표의 확정된 수치들을 지표 이름표별로 돌려준다. 그래프에 쓴다. 확정된 것이 없는 지표는 빈 목록이다. */
+export function listAllConfirmedSeries(): Promise<Record<string, ConfirmedPoint[]>> {
+  return readOnly((file) => {
+    const result: Record<string, ConfirmedPoint[]> = {};
+    for (const indicator of INDICATORS) result[indicator.code] = [];
+    for (const record of Object.values(file.records)) {
+      if (record.state !== "confirmed" || !record.confirmed || !(record.code in result)) continue;
+      result[record.code].push({
+        period: record.period,
+        value: record.confirmed.value,
+        unit: record.unit,
+        source: record.source,
+        edited: record.confirmed.edited,
+      });
+    }
+    for (const points of Object.values(result)) points.sort((a, b) => a.period.localeCompare(b.period));
+    return result;
+  });
+}
+
+/** 비교할 때 띄어쓰기·가운뎃점·괄호를 무시하고 대소문자를 구분하지 않게 맞춘다. */
+const compact = (text: string) => text.toLowerCase().replace(/[\s·()（）]/g, "");
+
+/**
+ * 지표 이름이나 분야에 검색어가 들어 있는 지표의 "확정된 최신 수치"를 돌려준다.
+ * 확정되지 않은 수치는 검색 결과에 나오지 않는다. (PRD: 검색은 확정된 최신 수치만 보여준다)
+ */
+export async function searchLatestConfirmed(query: string): Promise<CollectItem[]> {
+  const needle = compact(query);
+  if (needle.length === 0) return [];
+  const latest = await listLatestConfirmed();
+  return latest.filter((item) => compact(item.name).includes(needle) || compact(item.field).includes(needle));
+}
+
 /** 확정된 수치 중 가장 최근 기준시점의 한 건씩을 지표 정의 순서대로 돌려준다. 검색에 쓴다. */
 export function listLatestConfirmed(): Promise<CollectItem[]> {
   return readOnly((file) => {

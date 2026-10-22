@@ -137,6 +137,40 @@ export interface HistoryResponse {
   entries: HistoryEntry[];
 }
 
+/** 그래프에 그릴 확정된 수치 한 점 */
+export interface SeriesPoint {
+  /** 기준시점. 월간은 "202608", 연간은 "2024" */
+  period: string;
+  value: number;
+  unit: string;
+  /** 출처: "통계표명(번호)" */
+  source: string;
+  /** 사람이 고친 값인지 */
+  edited: boolean;
+}
+
+/** 지표 하나의 확정된 수치들. 확정되지 않은 수치는 들어 있지 않다. */
+export interface SeriesIndicator {
+  code: string;
+  name: string;
+  field: string;
+  frequency: "M" | "Y";
+  unit: string;
+  /** 기준시점이 오래된 것부터 */
+  points: SeriesPoint[];
+}
+
+/** 그래프 API의 정상 응답. 지표 10개가 지표 정의 순서대로 들어 있다. */
+export interface SeriesResponse {
+  indicators: SeriesIndicator[];
+}
+
+/** 지표 검색 API의 정상 응답. 확정된 최신 수치만 들어 있다. */
+export interface SearchResponse {
+  query: string;
+  items: CollectItem[];
+}
+
 /** API의 오류 응답 */
 export interface ApiErrorBody {
   error: { code: string; message: string };
