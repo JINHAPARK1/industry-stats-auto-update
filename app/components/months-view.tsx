@@ -2,6 +2,7 @@
 
 // 12개월 화면 — 지표(행) × 달(열) 표. 칸을 누르면 오른쪽에 확정 패널(DetailPanel)이 열려 그 달을 확정·수정한다.
 // 확정 전 값은 "미확정"으로 표시한다. 그래프·검색·서식에는 확정된 값만 쓰인다.
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ApiErrorBody, CollectItem, MonthsIndicator, MonthsResponse } from "@/lib/collect-types";
 import DetailPanel from "./detail-panel";
@@ -111,7 +112,9 @@ export default function MonthsView() {
             {monthly.map((indicator) => (
               <tr key={indicator.code} className="border-b border-zinc-200 last:border-b-0 dark:border-zinc-800">
                 <th scope="row" className="min-w-48 px-4 py-2 text-left font-semibold text-black dark:text-zinc-50">
-                  {indicator.name}
+                  <Link href={`/indicators/${indicator.code}`} aria-label={`${indicator.name} 그래프 페이지로 이동`} className="text-blue-800 underline-offset-4 hover:underline dark:text-blue-300">
+                    {indicator.name}
+                  </Link>
                   <span className="block text-sm font-normal text-zinc-500 dark:text-zinc-400">{indicator.unit}</span>
                 </th>
                 {periods.map((p) => {
@@ -134,7 +137,8 @@ export default function MonthsView() {
       {yearly.map((indicator) => (
         <section key={indicator.code} aria-label={`${indicator.name} 연도별`} className="overflow-x-auto rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
           <h3 className="mb-2 text-lg font-semibold text-black dark:text-zinc-50">
-            {indicator.name} <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">(연 1회 공표, {indicator.unit})</span>
+            <Link href={`/indicators/${indicator.code}`} className="text-blue-800 underline-offset-4 hover:underline dark:text-blue-300">{indicator.name}</Link>{" "}
+            <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">(연 1회 공표, {indicator.unit})</span>
           </h3>
           <table className="border-collapse">
             <tbody>

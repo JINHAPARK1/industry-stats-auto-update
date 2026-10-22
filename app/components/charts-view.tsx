@@ -2,6 +2,7 @@
 
 // Design Ref: §1 화면 구성 3) 그래프 화면 — 분야별 카드마다 선 그래프와 표. 확정된 수치만 그리고 기준시점은 항상 함께 보인다.
 // Plan SC: PLAN 17번 — 확정된 수치만 그린다. 소급 수집을 하지 않아서 확정 값이 쌓인 만큼만 나오고, 13개월 추이는 시간이 지나며 채워진다.
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type { ApiErrorBody, SeriesIndicator, SeriesResponse } from "@/lib/collect-types";
@@ -17,7 +18,9 @@ function IndicatorBlock({ indicator }: { indicator: SeriesIndicator }) {
   return (
     <section aria-label={indicator.name} className="border-t border-zinc-200 pt-5 first:border-t-0 first:pt-0 dark:border-zinc-800">
       <h3 className="text-lg font-semibold text-black dark:text-zinc-50">
-        {indicator.name}
+        <Link href={`/indicators/${indicator.code}`} className="text-blue-800 underline-offset-4 hover:underline dark:text-blue-300">
+          {indicator.name}
+        </Link>
         <span className="ml-2 text-base font-normal text-zinc-500 dark:text-zinc-400">
           ({indicator.unit} · {indicator.frequency === "M" ? "월간" : "연간"})
         </span>
