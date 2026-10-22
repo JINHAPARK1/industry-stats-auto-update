@@ -97,7 +97,7 @@ export default function StatsPanel() {
 
   const [month, setMonth] = useState("");
   // 지금 하는 일: 가져오는 중(collect), 저장된 값을 불러오는 중(load), 없음(null)
-  const [busy, setBusy] = useState<"collect" | "load" | null>("load");
+  const [busy, setBusy] = useState<"collect" | "load" | "form" | null>("load");
   const [data, setData] = useState<CollectResponse | null>(null);
   const [error, setError] = useState("");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
@@ -187,6 +187,33 @@ export default function StatsPanel() {
   }
 
   /** 수집 API를 부른다. codes를 주면 그 지표만 가져온다. (실패한 지표만 다시 가져올 때) */
+  /** 확정된 수치로 만든 한글 서식(.hwpx)을 내려받는다. 확정한 수치가 없으면 서버가 이유를 알려 준다. */
+  async function downloadForm() {
+    setError("");
+    setBusy("form");
+    try {
+      const response = await fetch("/api/form");
+      if (response.status === 401) return goToLogin();
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        setError((body as ApiErrorBody | null)?.error?.message ?? "서식을 만들지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
+        return;
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = decodeURIComponent(
+        (response.headers.get("Content-Disposition") ?? "").match(/filename\*=UTF-8''([^;]+)/)?.[1] ?? "산경과_주요통계.hwpx",
+      );
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("연결에 문제가 있습니다. 잠시 뒤 다시 눌러 주세요.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function collect(codes?: string[]) {
     if (busy) return;
     setBusy("collect");
@@ -277,11 +304,12 @@ export default function StatsPanel() {
           )}
           <button
             type="button"
-            disabled
-            title="한글 서식 파일을 받으면 연결합니다"
-            className="h-12 rounded-full border border-zinc-300 px-6 text-lg font-medium text-black disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-50"
+            onClick={downloadForm}
+            disabled={busy !== null}
+            title="확정한 수치만 한글 서식에 넣어 내려받습니다"
+            className="h-12 rounded-full border border-zinc-300 px-6 text-lg font-medium text-black hover:bg-zinc-100 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-50 dark:hover:bg-zinc-800"
           >
-            한글 서식 내려받기
+            {busy === "form" ? "서식을 만드는 중..." : "한글 서식 내려받기"}
           </button>
         </div>
 
