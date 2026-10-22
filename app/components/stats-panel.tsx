@@ -7,10 +7,10 @@
 // 한글 서식 버튼은 서식 파일을 받아야 연결할 수 있어서 아직 눌리지 않는다. (PLAN 15~16번)
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import type { ApiErrorBody, CollectItem, CollectResponse } from "@/lib/collect-types";
+import type { ApiErrorBody, BatchConfirmResponse, CollectItem, CollectResponse } from "@/lib/collect-types";
 import { INDICATORS } from "@/lib/indicators";
 import DetailPanel from "./detail-panel";
-import { countItems, formatCollectedAt } from "./format";
+import { countItems, formatChange, formatCollectedAt, formatPeriod, formatValue } from "./format";
 import ResultTable from "./result-table";
 
 interface MonthOption {
@@ -97,7 +97,9 @@ export default function StatsPanel() {
 
   const [month, setMonth] = useState("");
   // 지금 하는 일: 가져오는 중(collect), 저장된 값을 불러오는 중(load), 없음(null)
-  const [busy, setBusy] = useState<"collect" | "load" | "form" | null>("load");
+  const [busy, setBusy] = useState<"collect" | "load" | "form" | "batch" | null>("load");
+  const [batchOpen, setBatchOpen] = useState(false);
+  const [batchNote, setBatchNote] = useState("");
   const [data, setData] = useState<CollectResponse | null>(null);
   const [error, setError] = useState("");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
@@ -189,6 +191,17 @@ export default function StatsPanel() {
   /** 수집 API를 부른다. codes를 주면 그 지표만 가져온다. (실패한 지표만 다시 가져올 때) */
   /** 확정된 수치로 만든 한글 서식(.hwpx)을 내려받는다. 확정한 수치가 없으면 서버가 이유를 알려 준다. */
   async function downloadForm() {
+    // 확정하지 않은 지표는 서식에 "확정 전"으로 비어 들어간다. 모르고 받는 일이 없도록 한 번 더 묻는다.
+    const notConfirmed = tableItems.filter((item) => item.state !== "confirmed");
+    if (
+      data &&
+      notConfirmed.length > 0 &&
+      !window.confirm(
+        `확정하지 않은 지표가 ${notConfirmed.length}개 있습니다.\n이 지표는 서식에 "확정 전"으로 비어 들어갑니다.\n그래도 내려받을까요?`,
+      )
+    ) {
+      return;
+    }
     setError("");
     setBusy("form");
     try {
@@ -257,6 +270,43 @@ export default function StatsPanel() {
     });
   }
 
+  // 한 번에 확정할 수 있는 수치: 확정 전이고 이상치가 아닌 것. (이상치는 하나씩 원 통계표와 대조해 확정한다)
+  const batchCandidates = useMemo(
+    () => (viewOnly ? [] : tableItems.filter((item) => item.state === "unconfirmed" && item.period && !item.variation?.isOutlier)),
+    [tableItems, viewOnly],
+  );
+
+  /** 목록을 사람이 확인한 뒤 이상치가 아닌 수치를 한 번에 확정한다. 이상치는 서버도 한 번 더 걸러 낸다. */
+  async function confirmBatch() {
+    setError("");
+    setBatchNote("");
+    setBusy("batch");
+    try {
+      const response = await fetch("/api/confirm-batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: batchCandidates.map((item) => ({ code: item.code, period: item.period })) }),
+      });
+      if (response.status === 401) return goToLogin();
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body || !("confirmed" in body)) {
+        setError((body as ApiErrorBody | null)?.error?.message ?? "확정하지 못했습니다. 잠시 뒤 다시 눌러 주세요.");
+        return;
+      }
+      const result = body as BatchConfirmResponse;
+      for (const item of result.confirmed) handleChanged(item);
+      setBatchNote(
+        `${result.confirmed.length}개를 확정했습니다.` +
+          (result.skipped.length > 0 ? ` ${result.skipped.length}개는 건너뛰었습니다. (${result.skipped.map((s) => s.reason).join(" / ")})` : ""),
+      );
+      setBatchOpen(false);
+    } catch {
+      setError("연결에 문제가 있습니다. 잠시 뒤 다시 눌러 주세요.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const counts = data ? countItems(data.items) : null;
   const failedCodes = data ? data.items.filter((item) => item.state === "failed").map((item) => item.code) : [];
 
@@ -302,6 +352,17 @@ export default function StatsPanel() {
               실패한 지표만 다시 가져오기
             </button>
           )}
+          {batchCandidates.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setBatchOpen((open) => !open)}
+              disabled={busy !== null}
+              aria-expanded={batchOpen}
+              className="h-12 rounded-full border border-green-600 px-6 text-lg font-medium text-green-800 hover:bg-green-50 disabled:opacity-60 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-950"
+            >
+              이상치 아닌 수치 한 번에 확정 ({batchCandidates.length}개)
+            </button>
+          )}
           <button
             type="button"
             onClick={downloadForm}
@@ -312,6 +373,44 @@ export default function StatsPanel() {
             {busy === "form" ? "서식을 만드는 중..." : "한글 서식 내려받기"}
           </button>
         </div>
+
+        {batchOpen && batchCandidates.length > 0 && (
+          <div role="region" aria-label="한 번에 확정할 수치 확인" className="mt-4 rounded-xl border border-green-600 bg-white p-4 dark:border-green-700 dark:bg-zinc-900">
+            <p className="text-base font-semibold text-black dark:text-zinc-50">
+              아래 {batchCandidates.length}개를 KOSIS 값 그대로 확정합니다. 원 통계표의 값과 맞는지 훑어본 뒤 눌러 주세요.
+            </p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">이상치(⚠)로 표시된 수치는 여기에 없습니다. 하나씩 원 통계표와 대조해 확정해 주세요.</p>
+            <ul className="mt-3 divide-y divide-zinc-200 text-base dark:divide-zinc-800">
+              {batchCandidates.map((item) => (
+                <li key={item.code} className="flex flex-wrap items-baseline justify-between gap-x-4 py-1.5">
+                  <span className="font-medium text-black dark:text-zinc-50">{item.name}</span>
+                  <span className="tabular-nums text-zinc-700 dark:text-zinc-300">
+                    {formatPeriod(item.period)} · {formatValue(item.value)} {item.unit} · 전년 대비 {formatChange(item.variation)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-3 flex gap-3">
+              <button
+                type="button"
+                onClick={confirmBatch}
+                disabled={busy !== null}
+                className="h-11 rounded-full bg-green-700 px-6 text-base font-semibold text-white hover:bg-green-800 disabled:opacity-60"
+              >
+                {busy === "batch" ? "확정하는 중..." : `목록을 확인했습니다 · ${batchCandidates.length}개 확정`}
+              </button>
+              <button type="button" onClick={() => setBatchOpen(false)} disabled={busy !== null} className="h-11 rounded-full border border-zinc-300 px-6 text-base dark:border-zinc-700">
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
+
+        {batchNote && (
+          <p role="status" className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-base text-green-900 dark:bg-green-950 dark:text-green-200">
+            {batchNote}
+          </p>
+        )}
 
         {viewOnly && (
           <p className="mt-4 rounded-lg bg-zinc-100 px-4 py-3 text-base text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">

@@ -190,3 +190,9 @@ export interface MonthsResponse {
 export interface ApiErrorBody {
   error: { code: string; message: string };
 }
+
+/** 일괄 확정 API의 정상 응답. 확정된 항목과, 확정하지 않고 건너뛴 항목(이유 포함)이 들어 있다. */
+export interface BatchConfirmResponse {
+  confirmed: CollectItem[];
+  skipped: { code: string; period: string; reason: string }[];
+}
