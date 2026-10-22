@@ -1,6 +1,7 @@
 // Design Ref: §2 폴더와 파일 구조 — KOSIS 호출은 서버 전용 코드이며 `.env`의 키를 쓴다. 인증키가 브라우저로 나가면 안 된다.
 // Design Ref: §2 오류 처리 — KOSIS 오류 번호별로 화면에 보일 쉬운 문구를 정하고, 실패해도 자동으로 다시 부르지 않는다.
 // Plan SC: PLAN 2번 — 키 읽기, HTTPS, 오류 번호별 처리, 설비투자지수의 별도 호출 방식(첫 분류 ALL)을 포함한다.
+// Plan SC: PLAN 3번 — 지표별로 가져온 값에 출처·기준시점·단위를 붙여 모든 지표가 같은 모양(IndicatorSeries)이 되게 정리한다.
 import "server-only";
 
 import type { Indicator } from "./indicators";
@@ -215,4 +216,71 @@ export async function fetchIndicatorRows(
     throw new KosisError("no-data");
   }
   return rows.sort((a, b) => a.period.localeCompare(b.period));
+}
+
+/** 정리된 수치 한 건. 수치 옆에는 출처·기준시점·단위가 항상 붙는다. (DESIGN 공통 원칙 2) */
+export interface IndicatorPoint {
+  /** 기준시점. 월간은 "202608", 연간은 "2024" */
+  period: string;
+  /** 수치. KOSIS가 숫자를 주지 않으면 null이며, 추정해서 채우지 않는다. */
+  value: number | null;
+  /** 화면에 보이는 단위 (지표 정의의 unit) */
+  unit: string;
+  /** 출처 표기. "통계표명(번호)" (지표 정의의 tableName) */
+  source: string;
+  /** KOSIS에서 마지막으로 수정된 날짜. 다시 가져온 값이 바뀌었는지 볼 때 쓴다. */
+  lastChangedAt: string;
+}
+
+/** 지표 하나의 정리된 결과. 월간·연간 모두 같은 모양이다. */
+export interface IndicatorSeries {
+  /** 지표 이름표 (lib/indicators.ts의 code) */
+  code: string;
+  /** 화면에 보이는 지표 이름 */
+  name: string;
+  /** 화면에 보이는 분야 */
+  field: Indicator["field"];
+  /** 공표 주기. M = 월간, Y = 연간 */
+  frequency: Indicator["period"];
+  /** 화면에 보이는 단위 */
+  unit: string;
+  /** 출처 표기. "통계표명(번호)" */
+  source: string;
+  /** 수치들. 기준시점이 오래된 것부터 최신 순서로 정렬되어 있다. */
+  points: IndicatorPoint[];
+  /** KOSIS에서 가져온 시각 (ISO 형식) */
+  fetchedAt: string;
+}
+
+/**
+ * 지표 하나를 KOSIS에서 가져와 출처·기준시점·단위를 붙인 같은 모양으로 정리한다.
+ * 월간은 최근 13개월, 연간은 최근 3개년이다. (기간 수는 지표 정의에 있다)
+ * 실패하면 KosisError를 던진다.
+ */
+export async function fetchIndicatorSeries(
+  indicator: Indicator,
+  options: FetchOptions = {},
+): Promise<IndicatorSeries> {
+  const rows = await fetchIndicatorRows(indicator, options);
+  return {
+    code: indicator.code,
+    name: indicator.name,
+    field: indicator.field,
+    frequency: indicator.period,
+    unit: indicator.unit,
+    source: indicator.tableName,
+    points: rows.map((row) => ({
+      period: row.period,
+      value: row.value,
+      unit: indicator.unit, // KOSIS가 준 단위 글자는 쓰지 않고 지표 정의의 단위를 쓴다.
+      source: indicator.tableName,
+      lastChangedAt: row.lastChangedAt,
+    })),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
+/** 정리된 결과에서 가장 최근 기준시점의 수치 한 건을 돌려준다. 수치가 하나도 없으면 undefined. */
+export function getLatestPoint(series: IndicatorSeries): IndicatorPoint | undefined {
+  return series.points.at(-1);
 }
