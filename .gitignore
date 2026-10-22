@@ -39,3 +39,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local data store (개발용 파일 저장소. 수집·확정한 값이 들어 있어 git에 올리지 않는다)
+/.data/

@@ -1,24 +1,18 @@
 // Design Ref: §2 흐름 A — 「최신 수치 가져오기」: KOSIS에서 지표 10개를 가져와 변동률·이상치를 계산하고 "미확정" 상태로 돌려준다.
-// Design Ref: §2 폴더와 파일 구조 — `app/api/collect/`는 가져오기만 맡는다. 확정·저장은 `app/api/confirm/`과 `lib/store.ts`의 몫이다.
+// Design Ref: §2 폴더와 파일 구조 — `app/api/collect/`는 가져오기와 "미확정" 저장까지 맡는다. 확정은 `app/api/confirm/`의 몫이다.
 // Plan SC: PLAN 7번 — 10개 지표를 한 번에 가져오고, 응답의 기준시점이 대상 월과 다르면 "아직 공표 전"으로 표시한다.
+// Plan SC: PLAN 10번 — 가져온 수치를 "미확정"으로 저장한다. 이미 확정한 수치는 값을 바꾸지 않고 "KOSIS 값 변경" 표시만 남긴다.
 //
 // 접속 확인: proxy.ts가 1차로, 이 API가 `requireLogin`으로 한 번 더 확인한다. (PLAN 8번)
-//
-// 아직 하지 않는 것 (저장소가 정해지지 않았다)
-// - 수집 결과를 "미확정"으로 저장하는 일 → 응답의 saved가 항상 false다.
+// 저장에 실패해도 가져온 수치는 화면에 보여주고, saved=false와 사유(saveError)를 함께 돌려준다.
 import { requireLogin } from "@/lib/auth";
 import { INDICATORS } from "@/lib/indicators";
 import { collectIndicators, getLatestPoint } from "@/lib/kosis";
 import type { IndicatorPoint, IndicatorSeries } from "@/lib/kosis";
+import { StoreError, getStoredView, saveCollected } from "@/lib/store";
 import { calcVariation } from "@/lib/variation";
-import type { ApiErrorBody, CollectItem, CollectResponse, ItemState, VariationView } from "@/lib/collect-types";
-
-const NO_STORE = { "Cache-Control": "no-store" } as const;
-
-function errorResponse(status: number, code: string, message: string): Response {
-  const body: ApiErrorBody = { error: { code, message } };
-  return Response.json(body, { status, headers: NO_STORE });
-}
+import { NO_STORE, errorResponse } from "@/lib/api-response";
+import type { CollectItem, CollectResponse, ItemState, VariationView } from "@/lib/collect-types";
 
 /** 지금 가져오는 중인지. 여러 명이 동시에 누르는 것을 막는 간단한 장치다. (서버가 여러 대이면 완전하지 않다) */
 let collecting = false;
@@ -90,10 +84,13 @@ function emptyItem(series: Pick<IndicatorSeries, "code" | "name" | "field" | "fr
     state,
     period: null,
     value: null,
+    originalValue: null,
     unit: null,
     source: null,
     lastChangedAt: null,
     variation: null,
+    confirmed: null,
+    kosisChanged: null,
     latestPublishedPeriod: null,
     message: null,
     failure: null,
@@ -160,6 +157,7 @@ export async function POST(request: Request): Promise<Response> {
         ...emptyItem(series, "unconfirmed"),
         period: latest.period,
         value: latest.value,
+        originalValue: latest.value,
         unit: latest.unit,
         source: latest.source,
         lastChangedAt: latest.lastChangedAt,
@@ -167,18 +165,39 @@ export async function POST(request: Request): Promise<Response> {
       };
     });
 
-    const count = (state: ItemState) => items.filter((item) => item.state === state).length;
+    // 가져온 수치를 "미확정"으로 저장한다. 이미 확정한 수치는 저장소가 값을 지켜 주므로, 저장된 모양으로 다시 읽어 보여준다.
+    let finalItems = items;
+    let saved = false;
+    let saveError: string | null = null;
+    let storedMonths: string[] = [];
+    try {
+      await saveCollected(items);
+      const view = await getStoredView(targetMonth ?? undefined);
+      finalItems = items.map((item) =>
+        item.state === "unconfirmed"
+          ? (view.items.find((stored) => stored.code === item.code && stored.period === item.period) ?? item)
+          : item,
+      );
+      storedMonths = view.storedMonths;
+      saved = true;
+    } catch (error) {
+      saveError = error instanceof StoreError ? error.message : "저장하지 못했습니다. 운영자에게 알려 주세요.";
+    }
+
+    const count = (state: ItemState) => finalItems.filter((item) => item.state === state).length;
     const body: CollectResponse = {
       targetMonth,
       referenceMonth,
       collectedAt: collected.collectedAt,
+      confirmedCount: count("confirmed"),
       unconfirmedCount: count("unconfirmed"),
       notPublishedCount: count("not-published"),
       failedCount: count("failed"),
-      outlierCount: items.filter((item) => item.variation?.isOutlier).length,
-      // 저장소가 정해지기 전이라 수집 결과를 저장하지 않는다. (PLAN 9~10번 이후에 저장)
-      saved: false,
-      items,
+      outlierCount: finalItems.filter((item) => item.variation?.isOutlier).length,
+      saved,
+      saveError,
+      storedMonths,
+      items: finalItems,
     };
     return Response.json(body, { headers: NO_STORE });
   } finally {
