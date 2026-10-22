@@ -2,6 +2,7 @@
 // Design Ref: §2 오류 처리 — KOSIS 오류 번호별로 화면에 보일 쉬운 문구를 정하고, 실패해도 자동으로 다시 부르지 않는다.
 // Plan SC: PLAN 2번 — 키 읽기, HTTPS, 오류 번호별 처리, 설비투자지수의 별도 호출 방식(첫 분류 ALL)을 포함한다.
 // Plan SC: PLAN 3번 — 지표별로 가져온 값에 출처·기준시점·단위를 붙여 모든 지표가 같은 모양(IndicatorSeries)이 되게 정리한다.
+// Plan SC: PLAN 6번 — 10개 중 일부만 실패해도 성공한 지표는 그대로 쓰고, 실패한 지표만 빈칸과 사유로 남긴다. 자동으로 다시 부르지 않고, 호출 제한 등에 걸리면 더 부르지 않는다.
 import "server-only";
 
 import type { Indicator } from "./indicators";
@@ -283,4 +284,93 @@ export async function fetchIndicatorSeries(
 /** 정리된 결과에서 가장 최근 기준시점의 수치 한 건을 돌려준다. 수치가 하나도 없으면 undefined. */
 export function getLatestPoint(series: IndicatorSeries): IndicatorPoint | undefined {
   return series.points.at(-1);
+}
+
+/** 수집에 실패한 지표의 사유. 화면에는 message를 그대로 보여주면 된다. */
+export interface IndicatorFailure {
+  /** 실패 종류 */
+  kind: KosisErrorKind;
+  /** KOSIS가 준 오류 번호. 없으면 undefined */
+  errorCode?: string;
+  /** 화면에 보여줄 쉬운 문구 (DESIGN §2 오류 처리 표) */
+  message: string;
+  /** true면 이 지표는 호출하지 않았다. 앞선 실패(키 문제·호출 제한 등) 때문에 더 부르지 않은 경우다. */
+  skipped: boolean;
+}
+
+/** 지표 하나의 수집 결과. 성공하면 정리된 수치가, 실패하면 빈칸과 사유가 들어 있다. */
+export type IndicatorResult =
+  | { code: string; name: string; field: Indicator["field"]; status: "ok"; series: IndicatorSeries }
+  | { code: string; name: string; field: Indicator["field"]; status: "failed"; failure: IndicatorFailure };
+
+/** 지표 여러 개를 수집한 결과 묶음. */
+export interface CollectResult {
+  /** 요청한 지표 순서대로의 결과 */
+  results: IndicatorResult[];
+  /** 성공한 지표 수 */
+  okCount: number;
+  /** 실패한 지표 수 (호출하지 않고 건너뛴 것도 포함) */
+  failedCount: number;
+  /** 수집을 마친 시각 (ISO 형식) */
+  collectedAt: string;
+}
+
+/**
+ * 이 종류의 실패가 나면 나머지 지표도 같은 이유로 실패할 가능성이 크다.
+ * 그래서 더 부르지 않고 멈춘다. (분당 호출 제한 대응, 같은 오류를 헛되이 반복하지 않기)
+ */
+const STOP_EARLY_KINDS: readonly KosisErrorKind[] = ["missing-key", "auth", "rate-limit", "network"];
+
+/** 실패 결과를 만든다. KosisError가 아닌 오류는 내용을 버리고 "알 수 없음"으로만 남긴다. (키가 새지 않게) */
+function toFailure(error: unknown): IndicatorFailure {
+  const kosisError = error instanceof KosisError ? error : new KosisError("unknown");
+  return {
+    kind: kosisError.kind,
+    errorCode: kosisError.code,
+    message: kosisError.userMessage,
+    skipped: false,
+  };
+}
+
+/**
+ * 지표 여러 개를 하나씩 차례로 수집한다. 일부가 실패해도 나머지는 계속 수집한다.
+ * - 실패한 지표는 빈칸과 사유만 남기고, 값을 추정하지 않는다.
+ * - 실패해도 자동으로 다시 부르지 않는다. 사용자가 실패한 지표만 골라 다시 부르면 된다.
+ * - 키 문제·호출 제한·연결 문제가 나면 남은 지표는 부르지 않고 같은 사유로 "건너뜀" 처리한다.
+ * 이 함수는 오류를 던지지 않는다. 결과의 status로 성공·실패를 구분한다.
+ */
+export async function collectIndicators(
+  indicators: readonly Indicator[],
+  options: FetchOptions = {},
+): Promise<CollectResult> {
+  const results: IndicatorResult[] = [];
+  let stopped: IndicatorFailure | null = null;
+
+  for (const indicator of indicators) {
+    const base = { code: indicator.code, name: indicator.name, field: indicator.field };
+
+    if (stopped) {
+      results.push({ ...base, status: "failed", failure: { ...stopped, skipped: true } });
+      continue;
+    }
+
+    try {
+      const series = await fetchIndicatorSeries(indicator, options);
+      results.push({ ...base, status: "ok", series });
+    } catch (error) {
+      const failure = toFailure(error);
+      results.push({ ...base, status: "failed", failure });
+      if (STOP_EARLY_KINDS.includes(failure.kind)) {
+        stopped = failure;
+      }
+    }
+  }
+
+  const okCount = results.filter((result) => result.status === "ok").length;
+  return {
+    results,
+    okCount,
+    failedCount: results.length - okCount,
+    collectedAt: new Date().toISOString(),
+  };
 }
