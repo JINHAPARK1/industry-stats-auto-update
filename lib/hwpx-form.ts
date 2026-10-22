@@ -358,8 +358,11 @@ export async function buildTrendHwpx(recordsByCode: Readonly<Record<string, Coll
     return n === null ? "-" : `${signed(n)}${v.isOutlier ? "*" : ""}`;
   };
 
-  /** 분야·지표·단위 칸 뒤에 기간 칸을 같은 너비로 늘어놓는다. 가로 용지 폭 안에 들어가게 한다. */
-  const widthsFor = (count: number): number[] => [5500, 15500, 4400, ...Array<number>(count).fill(Math.floor(48000 / Math.max(count, 12)))];
+  /**
+   * 분야·지표·단위 칸 뒤에 기간 칸을 같은 너비로 늘어놓는다.
+   * 가로 용지 폭(84186)에 비해 표를 약 60000으로 좁게 잡는다. 한글에서 열어 보니 73400으로는 오른쪽이 잘려서, 여유를 크게 두었다.
+   */
+  const widthsFor = (count: number): number[] => [4300, 14000, 3800, ...Array<number>(count).fill(3200)];
   const alignsFor = (count: number): number[] => [CENTER, LEFT, CENTER, ...Array<number>(count).fill(RIGHT)];
 
   const tables: TableSpec[] = [
