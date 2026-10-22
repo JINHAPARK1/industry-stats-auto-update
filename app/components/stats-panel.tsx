@@ -102,6 +102,7 @@ export default function StatsPanel() {
   const [formType, setFormType] = useState<"monthly" | "trend">("monthly");
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchNote, setBatchNote] = useState("");
+  const [downloadNote, setDownloadNote] = useState("");
   const [data, setData] = useState<CollectResponse | null>(null);
   const [error, setError] = useState("");
   const [selectedCode, setSelectedCode] = useState<string | null>(null);
@@ -225,6 +226,7 @@ export default function StatsPanel() {
       }
     }
     setError("");
+    setDownloadNote("");
     setFormType(type);
     setBusy("form");
     try {
@@ -240,11 +242,14 @@ export default function StatsPanel() {
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
       link.href = url;
-      link.download = decodeURIComponent(
+      const fileName = decodeURIComponent(
         (response.headers.get("Content-Disposition") ?? "").match(/filename\*=UTF-8''([^;]+)/)?.[1] ?? "산경과_주요통계.hwpx",
       );
+      link.download = fileName;
       link.click();
       URL.revokeObjectURL(url);
+      // 받았는지 알 수 있게 파일 이름을 화면에 알려 준다. (브라우저의 내려받기 표시는 구석에 작게만 나온다)
+      setDownloadNote(`「${fileName}」 파일을 내려받았습니다. 브라우저의 내려받기 폴더에서 한글로 열어 주세요.`);
     } catch {
       setError("연결에 문제가 있습니다. 잠시 뒤 다시 눌러 주세요.");
     } finally {
@@ -443,6 +448,12 @@ export default function StatsPanel() {
         {batchNote && (
           <p role="status" className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-base text-green-900 dark:bg-green-950 dark:text-green-200">
             {batchNote}
+          </p>
+        )}
+
+        {downloadNote && (
+          <p role="status" className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-base text-green-900 dark:bg-green-950 dark:text-green-200">
+            {downloadNote}
           </p>
         )}
 
