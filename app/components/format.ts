@@ -52,12 +52,16 @@ function reasonText(reason: string): string {
 /** 수집 결과의 개수들을 항목 목록에서 다시 센다. (실패한 지표만 다시 가져왔을 때 합쳐진 결과로 세기 위해) */
 export function countItems(items: readonly CollectItem[]) {
   return {
+    confirmed: items.filter((item) => item.state === "confirmed").length,
     unconfirmed: items.filter((item) => item.state === "unconfirmed").length,
     notPublished: items.filter((item) => item.state === "not-published").length,
     failed: items.filter((item) => item.state === "failed").length,
     outliers: items.filter((item) => item.variation?.isOutlier).length,
   };
 }
+
+/** 시각을 "2026-10-22 13:55" 모양으로. 확정·이력 시각에도 쓴다. */
+export const formatDateTime = (iso: string): string => formatCollectedAt(iso);
 
 /** 수집한 시각을 "2026-10-22 13:55" 모양으로 */
 export function formatCollectedAt(iso: string): string {
