@@ -62,6 +62,8 @@ export type VariationReason =
 export interface Variation {
   /** 이번 기준시점 */
   period: string;
+  /** 비교한 전년 값. 없거나 비어 있으면 null */
+  baseValue: number | null;
   /** 비교한 전년 기준시점. 월간은 12개월 전, 연간은 1년 전. 없으면 null */
   basePeriod: string | null;
   /** 전년(동월) 대비 변동률(%). 소수 첫째 자리까지. 계산할 수 없으면 null */
@@ -110,8 +112,9 @@ export function isOutlierChange(
 export function calcVariation(series: IndicatorSeries, point: IndicatorPoint): Variation {
   const basePeriod = getBasePeriod(point.period, series.frequency);
   const rule = getOutlierRule(series.code);
-  const empty = (reason: VariationReason): Variation => ({
+  const empty = (reason: VariationReason, baseValue: number | null = null): Variation => ({
     period: point.period,
+    baseValue,
     basePeriod,
     changePercent: null,
     changePoint: null,
@@ -126,13 +129,14 @@ export function calcVariation(series: IndicatorSeries, point: IndicatorPoint): V
   if (point.value === null) return empty("no-value");
   if (base.value === null) return empty("no-base-value");
   // 비율(%)로 판단하는 지표는 전년 값이 0 이하이면 비율을 낼 수 없다. %포인트 차이는 계산할 수 있다.
-  if (rule.mode === "percent" && base.value <= 0) return empty("invalid-base");
+  if (rule.mode === "percent" && base.value <= 0) return empty("invalid-base", base.value);
 
   const changePoint = roundToOneDecimal(point.value - base.value);
   const changePercent =
     base.value > 0 ? roundToOneDecimal(((point.value - base.value) / base.value) * 100) : null;
   return {
     period: point.period,
+    baseValue: base.value,
     basePeriod,
     changePercent,
     changePoint,
@@ -151,4 +155,30 @@ export function calcSeriesVariations(series: IndicatorSeries): Variation[] {
 export function getLatestVariation(series: IndicatorSeries): Variation | undefined {
   const latest = series.points.at(-1);
   return latest ? calcVariation(series, latest) : undefined;
+}
+
+/**
+ * 값과 전년 값만으로 변동을 다시 계산한다. 사람이 값을 고쳐 확정하거나 확정을 취소해 값이 바뀔 때 쓴다.
+ * 계산 방식은 calcVariation과 같다. (소수 첫째 자리 반올림, 기준 값 자체도 이상치)
+ */
+export function recalcChange(
+  code: string,
+  value: number,
+  baseValue: number,
+): { changePercent: number | null; changePoint: number | null; isOutlier: boolean } {
+  const rule = getOutlierRule(code);
+  const changePoint = roundToOneDecimal(value - baseValue);
+  const changePercent = baseValue > 0 ? roundToOneDecimal(((value - baseValue) / baseValue) * 100) : null;
+  return { changePercent, changePoint, isOutlier: isOutlierChange(rule, { changePercent, changePoint }) };
+}
+
+/**
+ * 원 통계표와 대조해야 확정할 수 있는 수치인지. 이상치이거나, 전년 값이 없어 이상치 여부를 알 수 없는 수치다.
+ * 이런 수치는 일괄 확정에서 빠지고, 하나씩 대조 확인을 받아 확정한다.
+ */
+export function needsSourceCheck(
+  variation: { isOutlier: boolean; changePercent: number | null; changePoint: number | null } | null,
+): boolean {
+  if (variation === null) return true;
+  return variation.isOutlier || (variation.changePercent === null && variation.changePoint === null);
 }

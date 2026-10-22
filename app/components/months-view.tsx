@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ApiErrorBody, BatchConfirmResponse, CollectItem, MonthsIndicator, MonthsResponse } from "@/lib/collect-types";
+import { needsSourceCheck } from "@/lib/variation";
 import DetailPanel from "./detail-panel";
 import { formatPeriod, formatValue } from "./format";
 
@@ -86,11 +87,11 @@ export default function MonthsView() {
 
   // 한 번에 확정할 수 있는 수치: 확정 전이고 이상치가 아닌 모든 달·연도. (이상치는 하나씩 원 통계표와 대조해 확정한다)
   const batchCandidates = useMemo(
-    () => (data ?? []).flatMap((i) => i.items.filter((item) => item.state === "unconfirmed" && item.period && !item.variation?.isOutlier)),
+    () => (data ?? []).flatMap((i) => i.items.filter((item) => item.state === "unconfirmed" && item.period && !needsSourceCheck(item.variation))),
     [data],
   );
   const outlierCount = useMemo(
-    () => (data ?? []).flatMap((i) => i.items).filter((item) => item.state === "unconfirmed" && item.variation?.isOutlier).length,
+    () => (data ?? []).flatMap((i) => i.items).filter((item) => item.state === "unconfirmed" && needsSourceCheck(item.variation)).length,
     [data],
   );
 
@@ -102,7 +103,7 @@ export default function MonthsView() {
       const response = await fetch("/api/confirm-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: batchCandidates.map((item) => ({ code: item.code, period: item.period })) }),
+        body: JSON.stringify({ items: batchCandidates.map((item) => ({ code: item.code, period: item.period, value: item.originalValue })) }),
       });
       if (response.status === 401) return goToLogin();
       const body = (await response.json().catch(() => null)) as BatchConfirmResponse | ApiErrorBody | null;
@@ -153,11 +154,11 @@ export default function MonthsView() {
                 아래 {batchCandidates.length}개를 KOSIS 값 그대로 확정합니다. 각 지표의 수치가 원 통계표와 맞는지 훑어본 뒤 눌러 주세요.
               </p>
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-                이상치(⚠) {outlierCount}개는 여기에 없습니다. 칸을 눌러 하나씩 원 통계표와 대조해 확정해 주세요.
+                이상치(⚠)이거나 전년 값이 없어 비교할 수 없는 {outlierCount}개는 여기에 없습니다. 칸을 눌러 하나씩 원 통계표와 대조해 확정해 주세요.
               </p>
               <ul className="mt-3 divide-y divide-zinc-200 text-base dark:divide-zinc-800">
                 {(data ?? []).map((indicator) => {
-                  const list = indicator.items.filter((item) => item.state === "unconfirmed" && item.period && !item.variation?.isOutlier);
+                  const list = indicator.items.filter((item) => item.state === "unconfirmed" && item.period && !needsSourceCheck(item.variation));
                   if (list.length === 0) return null;
                   const periods = list.map((item) => item.period as string).sort();
                   return (

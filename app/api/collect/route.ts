@@ -65,6 +65,7 @@ function toVariationView(series: IndicatorSeries, point: IndicatorPoint): Variat
   const variation = calcVariation(series, point);
   return {
     basePeriod: variation.basePeriod,
+    baseValue: variation.baseValue,
     changePercent: variation.changePercent,
     changePoint: variation.changePoint,
     measure: variation.rule.mode,

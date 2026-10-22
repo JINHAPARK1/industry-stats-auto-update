@@ -24,6 +24,7 @@ const STORE_ERROR_STATUS: Record<StoreErrorKind, number> = {
   "not-confirmed": 409,
   "no-value": 422,
   "check-required": 422,
+  "value-changed": 409,
   "invalid-value": 400,
   "reason-required": 400,
 };

@@ -5,6 +5,7 @@
 // Plan SC: PLAN 14번 — 수치를 검토·수정하고 확정한다. 확정 취소와 재확정도 할 수 있고, 모두 수정 이력에 남는다.
 import { useEffect, useState } from "react";
 import type { ApiErrorBody, CollectItem, ConfirmResponse, HistoryEntry, HistoryResponse } from "@/lib/collect-types";
+import { needsSourceCheck } from "@/lib/variation";
 import { formatChange, formatDateTime, formatPeriod, formatThreshold, formatValue } from "./format";
 
 /** 고친 사유의 글자 수 상한. 서버(lib/store.ts)의 제한과 같다. */
@@ -39,6 +40,8 @@ export default function DetailPanel({ item, onClose, onChanged, onLoginRequired 
   const period = item.period ?? "";
   const isConfirmed = item.state === "confirmed";
   const isOutlier = item.variation?.isOutlier === true;
+  // 이상치이거나 전년 값이 없어 비교할 수 없는 수치는 원 통계표와 대조해야 확정할 수 있다.
+  const needsCheck = needsSourceCheck(item.variation);
 
   // 고친 값 칸: 비어 있으면 고치지 않는 것이다. 숫자가 아니거나 KOSIS 값과 같으면 "고치지 않음"으로 본다.
   const editedNumber = editedText.trim() === "" ? null : Number(editedText.replaceAll(",", ""));
@@ -81,7 +84,8 @@ export default function DetailPanel({ item, onClose, onChanged, onLoginRequired 
             ? {
                 editedValue: isEditing ? editedNumber : undefined,
                 reason: isEditing ? reason : undefined,
-                checkedAgainstSource: isOutlier ? checked : undefined,
+                checkedAgainstSource: needsCheck ? checked : undefined,
+                expectedValue: item.originalValue,
               }
             : {}),
         }),
@@ -109,7 +113,7 @@ export default function DetailPanel({ item, onClose, onChanged, onLoginRequired 
   }
 
   const confirmDisabled =
-    busy || (isOutlier && !checked) || editedInvalid || (isEditing && reason.trim().length === 0);
+    busy || (needsCheck && !checked) || editedInvalid || (isEditing && reason.trim().length === 0);
 
   return (
     <aside
@@ -143,6 +147,11 @@ export default function DetailPanel({ item, onClose, onChanged, onLoginRequired 
             전년(동월) 대비 {formatChange(item.variation)}
           </p>
           <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">출처: {item.source}</p>
+          {!isOutlier && needsCheck && (
+            <p className="mt-3 rounded-lg bg-orange-50 px-4 py-3 text-base text-orange-900 dark:bg-orange-950 dark:text-orange-200">
+              전년 값이 없어 이상치인지 알 수 없습니다. 원 통계표와 대조해 확인해 주세요.
+            </p>
+          )}
           {isOutlier && item.variation && (
             <p className="mt-3 rounded-lg bg-orange-50 px-4 py-3 text-base text-orange-900 dark:bg-orange-950 dark:text-orange-200">
               ⚠ 이상치입니다. (기준 {formatThreshold(item.variation)} 이상 변동) 원 통계표와 대조해 확인해 주세요.
@@ -177,7 +186,7 @@ export default function DetailPanel({ item, onClose, onChanged, onLoginRequired 
           </section>
         ) : (
           <section aria-label="확정하기" className="flex flex-col gap-4">
-            {isOutlier && (
+            {needsCheck && (
               <label className="flex items-start gap-3 text-base text-black dark:text-zinc-50">
                 <input
                   type="checkbox"

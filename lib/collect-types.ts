@@ -12,6 +12,8 @@ export type ItemState =
 export interface VariationView {
   /** 비교한 전년 기준시점 */
   basePeriod: string | null;
+  /** 비교한 전년 값. 고친 값으로 확정할 때 증감을 다시 계산하는 데 쓴다. 예전에 저장된 수치에는 없을 수 있다. */
+  baseValue?: number | null;
   /** 전년(동월) 대비 변동률(%). 계산할 수 없으면 null */
   changePercent: number | null;
   /** 전년(동월) 대비 %포인트 차이. 계산할 수 없으면 null */

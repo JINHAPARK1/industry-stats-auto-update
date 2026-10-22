@@ -20,6 +20,7 @@ import type {
   VariationView,
 } from "./collect-types";
 import { INDICATORS } from "./indicators";
+import { needsSourceCheck, recalcChange } from "./variation";
 
 /** 저장소에서 생길 수 있는 문제의 종류 */
 export type StoreErrorKind =
@@ -29,7 +30,8 @@ export type StoreErrorKind =
   | "already-confirmed" // 이미 확정됨
   | "not-confirmed" // 확정된 수치가 아님
   | "no-value" // 수치가 비어 있음
-  | "check-required" // 이상치인데 원 통계표 대조 확인이 없음
+  | "check-required" // 이상치(또는 비교할 전년 값이 없는 수치)인데 원 통계표 대조 확인이 없음
+  | "value-changed" // 화면에서 본 값과 지금 저장된 값이 다름
   | "invalid-value" // 고친 값이 올바르지 않음
   | "reason-required"; // 고친 사유가 없음
 
@@ -110,7 +112,17 @@ class FileBackend implements StoreBackend {
       // 임시 파일에 쓴 뒤 바꿔 치기해서, 쓰는 도중에 멈춰도 기존 파일이 깨지지 않게 한다.
       const temp = `${this.filePath}.tmp`;
       await fs.writeFile(temp, JSON.stringify(file, null, 2), "utf8");
-      await fs.rename(temp, this.filePath);
+      // Windows에서는 OneDrive·백신이 파일을 잠깐 잡고 있으면 바꿔 치기가 가끔 실패한다. 잠깐 기다렸다가 몇 번 다시 시도한다.
+      for (let attempt = 1; ; attempt++) {
+        try {
+          await fs.rename(temp, this.filePath);
+          break;
+        } catch (error) {
+          const code = (error as NodeJS.ErrnoException).code;
+          if (attempt >= 5 || (code !== "EPERM" && code !== "EBUSY" && code !== "EACCES")) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 40 * attempt));
+        }
+      }
     } catch {
       throw new StoreError("io", "저장하지 못했습니다. 운영자에게 알려 주세요.");
     }
@@ -160,6 +172,29 @@ const keyOf = (code: string, period: string) => `${code}|${period}`;
 
 function pushHistory(file: StoreFile, key: string, entry: HistoryEntry): void {
   (file.history[key] ??= []).push(entry);
+}
+
+/**
+ * 전년 값을 구한다. 새로 저장한 수치는 baseValue가 들어 있다.
+ * 예전에 저장한 수치에는 없어서, 이때는 원래 값과 변동으로 거꾸로 계산한다. (소수 첫째 자리 반올림 오차 정도만 있다)
+ */
+function baseValueOf(record: StoredRecord): number | null {
+  const variation = record.variation;
+  if (!variation) return null;
+  if (typeof variation.baseValue === "number") return variation.baseValue;
+  if (record.originalValue === null) return null;
+  if (variation.changePoint !== null) return record.originalValue - variation.changePoint;
+  if (variation.changePercent !== null) return record.originalValue / (1 + variation.changePercent / 100);
+  return null;
+}
+
+/** 값이 바뀐 수치의 전년(동월) 대비와 이상치 표시를 다시 계산한다. 전년 값을 알 수 없으면 그대로 둔다. */
+function refreshVariation(record: StoredRecord, value: number): void {
+  const variation = record.variation;
+  const base = baseValueOf(record);
+  if (!variation || base === null) return;
+  const change = recalcChange(record.code, value, base);
+  record.variation = { ...variation, baseValue: base, ...change };
 }
 
 /** 저장된 수치를 화면용 항목으로 바꾼다. */
@@ -318,6 +353,8 @@ export interface ConfirmInput {
   reason?: string;
   /** 이상치를 원 통계표와 대조했다고 확인했는지 */
   checkedAgainstSource?: boolean;
+  /** 사람이 화면에서 본 KOSIS 원래 값. 지금 저장된 값과 다르면 확정하지 않는다. (다른 사람이 그 사이 다시 가져와 값이 바뀐 경우를 막는다) */
+  expectedValue?: number | null;
 }
 
 /** 고친 사유의 글자 수 상한. 대외비가 섞이지 않게 짧게 제한한다. */
@@ -344,8 +381,11 @@ export function confirmRecord(
     if (record.originalValue === null) {
       throw new StoreError("no-value", "수치가 없어 확정할 수 없습니다.");
     }
-    if (record.variation?.isOutlier && input.checkedAgainstSource !== true) {
-      throw new StoreError("check-required", "이상치로 표시된 수치입니다. 원 통계표와 대조했는지 확인해 주세요.");
+    if (input.expectedValue !== undefined && input.expectedValue !== record.originalValue) {
+      throw new StoreError("value-changed", "화면을 연 뒤 KOSIS 값이 바뀌었습니다. 화면을 새로 고쳐 바뀐 값을 확인한 뒤 다시 확정해 주세요.");
+    }
+    if (needsSourceCheck(record.variation) && input.checkedAgainstSource !== true) {
+      throw new StoreError("check-required", "이상치이거나 비교할 전년 값이 없는 수치입니다. 원 통계표와 대조했는지 확인해 주세요.");
     }
 
     const original = record.originalValue;
@@ -366,6 +406,8 @@ export function confirmRecord(
       }
       value = input.editedValue;
       edited = true;
+      // 고친 값 기준으로 전년(동월) 대비와 이상치를 다시 계산한다. 화면·서식·검색의 수치와 증감이 서로 맞게 한다.
+      refreshVariation(record, value);
     }
 
     const nowIso = now.toISOString();
@@ -414,6 +456,8 @@ export function unconfirmRecord(code: string, period: string, now: Date = new Da
     record.state = "unconfirmed";
     record.confirmed = null;
     record.kosisChanged = null;
+    // 확정을 취소하면 KOSIS 값 기준으로 전년 대비와 이상치를 다시 계산한다.
+    if (record.originalValue !== null) refreshVariation(record, record.originalValue);
     pushHistory(file, key, {
       at: nowIso,
       type: "unconfirmed",
@@ -496,6 +540,30 @@ export async function searchLatestConfirmed(query: string): Promise<CollectItem[
   if (needle.length === 0) return [];
   const latest = await listLatestConfirmed();
   return latest.filter((item) => compact(item.name).includes(needle) || compact(item.field).includes(needle));
+}
+
+/**
+ * 한 달 기준으로 확정된 수치를 지표 정의 순서대로 돌려준다. (이번 월 한글 서식용)
+ * - month를 주면 그 달, 주지 않으면 확정된 월간 수치 중 가장 최근 달이다.
+ * - 월간 지표는 그 달에 확정된 값만 넣는다. 다른 달의 확정 값으로 채우지 않는다.
+ * - 연간 지표(신생기업 수)는 달과 상관없이 가장 최근에 확정된 연도의 값이다.
+ */
+export function listConfirmedForMonth(month?: string): Promise<{ month: string | null; items: CollectItem[] }> {
+  return readOnly((file) => {
+    const confirmed = Object.values(file.records).filter((r) => r.state === "confirmed");
+    const target = month ?? confirmed.filter((r) => r.frequency === "M").map((r) => r.period).sort().at(-1) ?? null;
+    const items: CollectItem[] = [];
+    for (const indicator of INDICATORS) {
+      const record =
+        indicator.period === "M"
+          ? target
+            ? file.records[keyOf(indicator.code, target)]
+            : undefined
+          : confirmed.filter((r) => r.code === indicator.code).sort((a, b) => b.period.localeCompare(a.period))[0];
+      if (record && record.state === "confirmed") items.push(toItem(record));
+    }
+    return { month: target, items };
+  });
 }
 
 /** 확정된 수치 중 가장 최근 기준시점의 한 건씩을 지표 정의 순서대로 돌려준다. 검색에 쓴다. */

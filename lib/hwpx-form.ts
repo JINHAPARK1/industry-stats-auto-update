@@ -305,7 +305,7 @@ async function composeHwpx(doc: DocumentSpec): Promise<Buffer> {
  * 이번 월 서식: 확정된 최신 수치로 지표 10개를 한 표에 담는다.
  * 확정된 수치가 하나도 없으면 FormError("no-confirmed"), 서식 기본 틀이 없으면 FormError("no-template")를 던진다.
  */
-export async function buildFormHwpx(confirmed: readonly CollectItem[], now: Date = new Date()): Promise<Buffer> {
+export async function buildFormHwpx(confirmed: readonly CollectItem[], month: string | null, now: Date = new Date()): Promise<Buffer> {
   if (!confirmed.some((item) => item.state === "confirmed")) {
     throw new FormError("no-confirmed", "확정한 수치가 없습니다. 먼저 수치를 확정해 주세요.");
   }
@@ -313,7 +313,7 @@ export async function buildFormHwpx(confirmed: readonly CollectItem[], now: Date
   return composeHwpx({
     title: "산경과 주요 통계",
     notes: [
-      `※ 기준일 ${now.toISOString().slice(0, 10)}. 출처는 KOSIS(국가통계포털)이며 공개 통계만 담았습니다.`,
+      `※ 기준 월 ${month ? fmtPeriod(month) : "-"}, 기준일 ${now.toISOString().slice(0, 10)}. 출처는 KOSIS(국가통계포털)이며 공개 통계만 담았습니다.`,
       '※ 사람이 확인해 확정한 수치만 넣었습니다. "확정 전"은 아직 확정하지 않아 비워 둔 지표입니다. (이상치)는 전년(동월) 대비 변동이 기준을 넘었다는 표시입니다.',
     ],
     tables: [

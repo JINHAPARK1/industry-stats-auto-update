@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { ApiErrorBody, BatchConfirmResponse, CollectItem, CollectResponse, MonthsResponse } from "@/lib/collect-types";
 import { INDICATORS } from "@/lib/indicators";
+import { needsSourceCheck } from "@/lib/variation";
 import DetailPanel from "./detail-panel";
 import { countItems, formatChange, formatCollectedAt, formatPeriod, formatValue } from "./format";
 import ResultTable from "./result-table";
@@ -227,7 +228,9 @@ export default function StatsPanel() {
     setFormType(type);
     setBusy("form");
     try {
-      const response = await fetch(`/api/form?type=${type}`);
+      // 이번 월 서식은 화면에서 보고 있는 달 기준으로 만든다. (화면의 확정 현황과 서식 내용이 같은 달이 되게 한다)
+      const target = type === "monthly" ? (data?.targetMonth ?? "") : "";
+      const response = await fetch(`/api/form?type=${type}${target ? `&month=${target}` : ""}`);
       if (response.status === 401) return goToLogin();
       if (!response.ok) {
         const body = await response.json().catch(() => null);
@@ -294,7 +297,7 @@ export default function StatsPanel() {
 
   // 한 번에 확정할 수 있는 수치: 확정 전이고 이상치가 아닌 것. (이상치는 하나씩 원 통계표와 대조해 확정한다)
   const batchCandidates = useMemo(
-    () => (viewOnly ? [] : tableItems.filter((item) => item.state === "unconfirmed" && item.period && !item.variation?.isOutlier)),
+    () => (viewOnly ? [] : tableItems.filter((item) => item.state === "unconfirmed" && item.period && !needsSourceCheck(item.variation))),
     [tableItems, viewOnly],
   );
 
@@ -307,7 +310,7 @@ export default function StatsPanel() {
       const response = await fetch("/api/confirm-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: batchCandidates.map((item) => ({ code: item.code, period: item.period })) }),
+        body: JSON.stringify({ items: batchCandidates.map((item) => ({ code: item.code, period: item.period, value: item.originalValue })) }),
       });
       if (response.status === 401) return goToLogin();
       const body = await response.json().catch(() => null);
@@ -410,7 +413,7 @@ export default function StatsPanel() {
             <p className="text-base font-semibold text-black dark:text-zinc-50">
               아래 {batchCandidates.length}개를 KOSIS 값 그대로 확정합니다. 원 통계표의 값과 맞는지 훑어본 뒤 눌러 주세요.
             </p>
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">이상치(⚠)로 표시된 수치는 여기에 없습니다. 하나씩 원 통계표와 대조해 확정해 주세요.</p>
+            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">이상치(⚠)이거나 전년 값이 없어 비교할 수 없는 수치는 여기에 없습니다. 하나씩 원 통계표와 대조해 확정해 주세요.</p>
             <ul className="mt-3 divide-y divide-zinc-200 text-base dark:divide-zinc-800">
               {batchCandidates.map((item) => (
                 <li key={item.code} className="flex flex-wrap items-baseline justify-between gap-x-4 py-1.5">

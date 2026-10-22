@@ -28,7 +28,7 @@ async function parseRequest(request: Request): Promise<ConfirmRequest | Response
     return errorResponse(400, "invalid-body", "요청 내용을 읽을 수 없습니다.");
   }
 
-  const { code, period, action, editedValue, reason, checkedAgainstSource } = body as Record<string, unknown>;
+  const { code, period, action, editedValue, reason, checkedAgainstSource, expectedValue } = body as Record<string, unknown>;
   if (typeof code !== "string" || !INDICATORS.some((indicator) => indicator.code === code)) {
     return errorResponse(400, "invalid-code", "지표를 알 수 없습니다.");
   }
@@ -40,6 +40,13 @@ async function parseRequest(request: Request): Promise<ConfirmRequest | Response
   }
 
   const input: ConfirmInput = {};
+  if (action === "confirm") {
+    // 사람이 화면에서 본 KOSIS 값. 서버에 지금 저장된 값과 다르면 확정하지 않는다.
+    if (typeof expectedValue !== "number" || !Number.isFinite(expectedValue)) {
+      return errorResponse(400, "invalid-expected", "화면을 새로 고친 뒤 다시 확정해 주세요.");
+    }
+    input.expectedValue = expectedValue;
+  }
   if (editedValue !== undefined && editedValue !== null) {
     if (typeof editedValue !== "number" || !Number.isFinite(editedValue)) {
       return errorResponse(400, "invalid-value", "고친 값은 0 이상의 숫자로 적어 주세요.");
