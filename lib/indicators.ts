@@ -159,3 +159,20 @@ export const INDICATORS: readonly Indicator[] = [
 export function getIndicator(code: string): Indicator | undefined {
   return INDICATORS.find((indicator) => indicator.code === code);
 }
+
+/** 지표 상세 페이지의 수준(값) 그래프 형식 */
+export type ChartKind = "line" | "bar" | "area";
+
+/** 지표별 그래프 형식과 그렇게 정한 이유. 상세 페이지 그래프 아래에 이유를 보여준다. */
+export const CHART_KINDS: Record<string, { kind: ChartKind; reason: string; baseline?: number }> = {
+  "manufacturing-production": { kind: "line", baseline: 100, reason: "생산지수는 달마다 이어지는 흐름이라 선 그래프로 그리고, 기준 시점(2020=100)을 점선으로 함께 보여줍니다." },
+  "semiconductor-production": { kind: "line", baseline: 100, reason: "생산지수는 달마다 이어지는 흐름이라 선 그래프로 그리고, 기준 시점(2020=100)을 점선으로 함께 보여줍니다." },
+  "pharma-production": { kind: "line", baseline: 100, reason: "생산지수는 달마다 이어지는 흐름이라 선 그래프로 그리고, 기준 시점(2020=100)을 점선으로 함께 보여줍니다." },
+  "auto-production": { kind: "line", baseline: 100, reason: "생산지수는 달마다 이어지는 흐름이라 선 그래프로 그리고, 기준 시점(2020=100)을 점선으로 함께 보여줍니다." },
+  "primary-metal-production": { kind: "line", baseline: 100, reason: "생산지수는 달마다 이어지는 흐름이라 선 그래프로 그리고, 기준 시점(2020=100)을 점선으로 함께 보여줍니다." },
+  "petroleum-production": { kind: "line", baseline: 100, reason: "생산지수는 달마다 이어지는 흐름이라 선 그래프로 그리고, 기준 시점(2020=100)을 점선으로 함께 보여줍니다." },
+  "semiconductor-equipment-investment": { kind: "bar", baseline: 100, reason: "설비투자는 달마다 들쭉날쭉하고 한 번에 크게 움직여서, 달별 크기를 비교하기 좋은 막대 그래프로 그립니다." },
+  "auto-investment": { kind: "bar", baseline: 100, reason: "설비투자는 달마다 들쭉날쭉하고 한 번에 크게 움직여서, 달별 크기를 비교하기 좋은 막대 그래프로 그립니다." },
+  "manufacturing-utilization": { kind: "area", reason: "가동률은 전체 생산능력 중 얼마나 쓰는지(%)를 보는 수준 지표라, 선 아래를 채운 영역 그래프로 '찬 정도'를 보여줍니다." },
+  "new-firms": { kind: "bar", reason: "신생기업 수는 1년에 한 번 나오는 연도별 값이라, 연도끼리 크기를 비교하는 막대 그래프로 그립니다." },
+};

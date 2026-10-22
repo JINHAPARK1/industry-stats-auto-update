@@ -4,6 +4,7 @@
 // Design Ref: 공통 원칙 1 — 미확정 수치는 이 검토 표에만 "미확정"으로 보인다. 확정된 수치는 "확정"으로 보인다.
 // Plan SC: PLAN 13번 — 수치·출처·기준시점·단위·전년(동월) 대비, 이상치 표시, 수집 실패 표시.
 // Plan SC: PLAN 14번 — 줄을 누르면 오른쪽에 확정·수정 패널이 열린다. (패널은 detail-panel.tsx)
+import Link from "next/link";
 import type { CollectItem } from "@/lib/collect-types";
 import { formatChange, formatPeriod, formatThreshold, formatValue } from "./format";
 
@@ -66,21 +67,14 @@ function ItemRow({ item, selected, onSelect }: ItemRowProps) {
     >
       <td className="whitespace-nowrap px-4 py-3 text-zinc-700 dark:text-zinc-300">{item.field}</td>
       <th scope="row" className="min-w-48 px-4 py-3 text-left font-semibold text-black dark:text-zinc-50">
-        {clickable ? (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onSelect(item.code);
-            }}
-            aria-label={`${item.name} 확정·수정 열기`}
-            className="text-left underline-offset-4 hover:underline focus-visible:underline"
-          >
-            {item.name}
-          </button>
-        ) : (
-          item.name
-        )}
+        <Link
+          href={`/indicators/${item.code}`}
+          onClick={(event) => event.stopPropagation()}
+          aria-label={`${item.name} 그래프 페이지로 이동`}
+          className="text-blue-800 underline-offset-4 hover:underline focus-visible:underline dark:text-blue-300"
+        >
+          {item.name}
+        </Link>
         {item.message && (
           <span
             className={`mt-1 block text-sm font-normal ${

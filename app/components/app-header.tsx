@@ -5,7 +5,7 @@ import SearchBox from "./search-box";
 
 interface AppHeaderProps {
   /** 지금 보고 있는 화면. 이동 링크에서 강조한다. */
-  current: "monthly" | "months" | "charts";
+  current: "monthly" | "months" | "charts" | "indicator";
 }
 
 const LINK_BASE = "rounded-full px-4 py-2 text-base font-medium";
