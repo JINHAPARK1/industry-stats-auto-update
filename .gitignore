@@ -46,3 +46,7 @@ next-env.d.ts
 # 도구 작업 기록 (커밋하지 않는다)
 /.bkit/
 /.claude/
+
+# 한글 서식 샘플 만들기에 쓰는 외부 기본 틀(사용 조건 불명)과 만들어진 샘플 파일
+/samples/base-template/
+/samples/*.hwpx
