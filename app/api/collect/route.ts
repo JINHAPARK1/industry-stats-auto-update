@@ -2,9 +2,11 @@
 // Design Ref: §2 폴더와 파일 구조 — `app/api/collect/`는 가져오기만 맡는다. 확정·저장은 `app/api/confirm/`과 `lib/store.ts`의 몫이다.
 // Plan SC: PLAN 7번 — 10개 지표를 한 번에 가져오고, 응답의 기준시점이 대상 월과 다르면 "아직 공표 전"으로 표시한다.
 //
-// 아직 하지 않는 것 (저장소가 정해지지 않았고, 비밀번호 기능은 PLAN 8번에서 만든다)
+// 접속 확인: proxy.ts가 1차로, 이 API가 `requireLogin`으로 한 번 더 확인한다. (PLAN 8번)
+//
+// 아직 하지 않는 것 (저장소가 정해지지 않았다)
 // - 수집 결과를 "미확정"으로 저장하는 일 → 응답의 saved가 항상 false다.
-// - 비밀번호 확인 → 그동안은 배포(운영) 환경에서 이 API를 거절한다. (checkAccess)
+import { requireLogin } from "@/lib/auth";
 import { INDICATORS } from "@/lib/indicators";
 import { collectIndicators, getLatestPoint } from "@/lib/kosis";
 import type { IndicatorFailure, IndicatorPoint, IndicatorSeries } from "@/lib/kosis";
@@ -66,17 +68,6 @@ const NO_STORE = { "Cache-Control": "no-store" } as const;
 function errorResponse(status: number, code: string, message: string): Response {
   const body: ErrorBody = { error: { code, message } };
   return Response.json(body, { status, headers: NO_STORE });
-}
-
-/**
- * 접속 확인 자리. 비밀번호 기능(PLAN 8번)이 만들어지기 전까지는 배포(운영) 환경에서 이 API를 막아
- * 아무나 부를 수 없게 한다. 비밀번호 기능이 생기면 이 함수를 접속 상태 확인으로 바꾼다.
- */
-function checkAccess(): Response | null {
-  if (process.env.NODE_ENV === "production") {
-    return errorResponse(401, "access-not-ready", "접속 확인 기능이 아직 없어 배포 환경에서는 사용할 수 없습니다.");
-  }
-  return null;
 }
 
 /** 지금 가져오는 중인지. 여러 명이 동시에 누르는 것을 막는 간단한 장치다. (서버가 여러 대이면 완전하지 않다) */
@@ -160,7 +151,7 @@ function emptyItem(series: Pick<IndicatorSeries, "code" | "name" | "field" | "fr
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const denied = checkAccess();
+  const denied = await requireLogin(request);
   if (denied) return denied;
 
   const parsed = await parseRequest(request);
