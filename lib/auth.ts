@@ -20,10 +20,29 @@ const MIN_SECRET_LENGTH = 32;
 const NO_STORE = { "Cache-Control": "no-store" } as const;
 const encoder = new TextEncoder();
 
+/**
+ * 공용 비밀번호의 최소 길이. 인터넷에 공개되는 배포(운영) 환경에서는 이보다 짧으면 설정으로 인정하지 않는다.
+ * 개발 중에는 막지 않고 경고만 남긴다. (로컬 시험용으로 짧은 값을 쓸 수 있게)
+ */
+export const MIN_PASSWORD_LENGTH = 12;
+
+/** 같은 경고를 서버 기록에 한 번만 남기려는 표시 */
+let warnedShortPassword = false;
+
 /** 접속 확인에 필요한 설정(`.env`)이 모두 있는지. 하나라도 없으면 아무도 들어올 수 없게 닫아 둔다. */
 export function isAuthConfigured(): boolean {
   const password = process.env.APP_PASSWORD ?? "";
   const secret = process.env.SESSION_SECRET ?? "";
+  const tooShort = password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  if (tooShort && !warnedShortPassword) {
+    warnedShortPassword = true;
+    // 비밀번호 값은 남기지 않고 길이 기준만 알린다.
+    console.warn(
+      `[auth] APP_PASSWORD가 ${MIN_PASSWORD_LENGTH}자 미만입니다. ` +
+        (process.env.NODE_ENV === "production" ? "배포 환경이라 로그인을 막습니다." : "개발 환경이라 허용하지만 배포 전에 길게 바꿔야 합니다."),
+    );
+  }
+  if (process.env.NODE_ENV === "production" && tooShort) return false;
   return password.length > 0 && secret.length >= MIN_SECRET_LENGTH;
 }
 
