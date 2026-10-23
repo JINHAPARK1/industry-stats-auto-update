@@ -64,7 +64,7 @@
 |---|---|---|
 | 1~7 데이터 기반 | 완료 | 지표 정의, KOSIS 호출, 값 정리, 변동률·이상치(지표군별 기준), 수집 실패 처리, 수집 API |
 | 8 비밀번호 접근 제한 | 완료 | 틀린 횟수 제한은 저장소가 정해지면 추가 |
-| 9~11 저장소·수정 이력 | 완료 (개발용) | 개발용 파일 저장소로 구현. 배포용 저장소는 21번 전에 결정 |
+| 9~11 저장소·수정 이력 | 완료 (개발용) | 개발용 파일 저장소 + 배포용 Supabase 저장소(2026-10-23, 버전 비교로 동시 저장 보호). Vercel 재배포 전 |
 | 12~14 화면 | 완료 | 화면 틀, 가져오기·결과 표, 확정 패널(원 통계표 대조 확인, 고친 값·사유, 확정 취소) |
 | 추가: 일괄 확정 | 완료 (이번 달 화면만) | 이상치 아닌 수치를 목록 확인 뒤 한 번에 확정. 서버가 이상치·비교 불가·값 불일치를 걸러 냄. 지난 달 화면에서 쓰는 것은 아직 없음 |
 | 15 서식 구성 | 완료 | 기존 서식 칸 채우기 대신 새 표 생성 방식으로 정함. 서식 2종(이번 월 세로 / 시계열 추이 가로) |
@@ -81,7 +81,7 @@
 - Vercel: Preview 주소도 보호(Deployment Protection), 환경변수는 Production에만 등록, 배포 뒤 로그에 `apiKey=`가 보이는지 확인
 - 운영 수칙: 인사이동이나 쿠키 유출 의심 시 비밀번호를 바꾼다. 고친 사유에 대외비가 적혔다면 운영자가 지우는 절차를 정한다.
 - 결정 대기: 확정자 기록 방식(DESIGN §6 5항)
-| 21 배포 | **일부 완료** | 2026-10-23 Vercel 배포(https://industry-stats-auto-update.vercel.app)와 공개 GitHub 저장소(https://github.com/JINHAPARK1/industry-stats-auto-update) 완료. 환경변수는 `KOSIS_API_KEY`·`APP_PASSWORD`·`SESSION_SECRET` 세 개만 Production에 등록. 지금은 소개·로그인 화면만 동작하고 통계 저장·확정은 배포용 저장소가 정해질 때까지 막혀 있음. 남은 것: 배포용 저장소 결정, 소속 부처 정보보안 지침 확인, Vercel–GitHub 연결(Vercel GitHub 앱 설치 필요, 지금은 연결 전이라 자동 배포 안 됨) |
+| 21 배포 | **일부 완료** | 2026-10-23 Vercel 배포(https://industry-stats-auto-update.vercel.app)와 공개 GitHub 저장소(https://github.com/JINHAPARK1/industry-stats-auto-update) 완료. 환경변수는 앱 키 6개(`KOSIS_API_KEY`·`APP_PASSWORD`·`SESSION_SECRET`·`STORE_BACKEND`·`SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY`)만 Production에 등록. 배포용 저장소는 Supabase로 정했고 코드를 담은 재배포 전이라, 지금 배포본은 소개·로그인 화면만 동작하고 통계 저장·확정은 막혀 있음. 남은 것: Supabase 저장소 코드를 담아 재배포, 소속 부처 정보보안 지침 확인, Vercel–GitHub 연결(Vercel GitHub 앱 설치 필요, 지금은 연결 전이라 자동 배포 안 됨) |
 
 ## 진행 규칙
 - 작업마다 CLAUDE.md의 검증 루프를 따른다. (변경 → lint·build → 화면 확인 → 커밋 → 한 줄 요약)
