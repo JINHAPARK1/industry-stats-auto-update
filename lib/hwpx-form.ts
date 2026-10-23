@@ -243,13 +243,49 @@ function renderTable(
   );
 }
 
-/** 기본 틀 파일을 읽는다. 없으면 FormError("no-template"). */
+/** Supabase에서 가져온 기본 틀. 한 번 가져오면 서버가 켜져 있는 동안 다시 가져오지 않는다. */
+let remoteTemplate: Promise<Map<string, string>> | null = null;
+
+/** 배포용 저장소(Supabase)의 `app_template` 표에서 기본 틀 전체를 가져온다. 설정이 없거나 실패하면 null. */
+function fetchRemoteTemplate(): Promise<Map<string, string>> | null {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  remoteTemplate ??= fetch(`${url}/rest/v1/app_template?select=name,content`, {
+    cache: "no-store",
+    headers: { apikey: key, Authorization: `Bearer ${key}` },
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error("template fetch failed");
+      const rows = (await response.json()) as { name: string; content: string }[];
+      return new Map(rows.map((row) => [row.name, row.content]));
+    })
+    .catch((error) => {
+      remoteTemplate = null; // 실패한 결과를 붙잡아 두지 않고 다음에 다시 시도한다.
+      throw error;
+    });
+  return remoteTemplate;
+}
+
+/**
+ * 기본 틀 파일을 읽는다. 내 컴퓨터의 `samples/base-template/`가 있으면 그것을 쓰고,
+ * 없으면(Vercel 배포본) Supabase에 비공개로 올려 둔 틀을 쓴다. 둘 다 없으면 FormError("no-template").
+ */
 async function readTemplate(name: string): Promise<string> {
+  let text: string | undefined;
   try {
-    return (await readFile(path.join(FORM_TEMPLATE_DIR, name), "utf8")).replace(/\r\n/g, "\n");
+    text = await readFile(path.join(FORM_TEMPLATE_DIR, name), "utf8");
   } catch {
+    try {
+      text = (await fetchRemoteTemplate())?.get(name);
+    } catch {
+      text = undefined;
+    }
+  }
+  if (text === undefined) {
     throw new FormError("no-template", "한글 서식 틀을 찾을 수 없습니다. 운영자에게 알려 주세요.");
   }
+  return text.replace(/\r\n/g, "\n");
 }
 
 /** 문서 내용(제목·안내·표들)을 한글 서식(.hwpx) 파일로 만든다. 칸마다 자간을 맞춰 한 줄에 들어가게 한다. */
