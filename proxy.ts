@@ -5,22 +5,27 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isLoggedIn } from "@/lib/auth";
 
-/** 로그인하지 않아도 열 수 있는 주소. 로그인 화면과 로그인·로그아웃 API뿐이다. */
-const PUBLIC_PATHS = new Set(["/login", "/api/login", "/api/logout"]);
+/** 로그인하지 않아도 열 수 있는 주소. 소개 화면, 로그인 화면, 로그인·로그아웃 API뿐이다. (정확히 이 주소만, 하위 주소는 열지 않는다) */
+const PUBLIC_PATHS = new Set(["/intro", "/login", "/api/login", "/api/logout"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const loggedIn = await isLoggedIn(request);
 
   if (PUBLIC_PATHS.has(pathname)) {
-    // 이미 들어와 있는데 로그인 화면을 열면 첫 화면으로 보낸다.
-    if (pathname === "/login" && loggedIn) {
+    // 이미 들어와 있는데 소개·로그인 화면을 열면 첫 화면으로 보낸다.
+    if ((pathname === "/login" || pathname === "/intro") && loggedIn) {
       return NextResponse.redirect(new URL("/", request.url));
     }
     return NextResponse.next();
   }
 
   if (loggedIn) return NextResponse.next();
+
+  // 로그인 전에 맨 첫 주소(/)로 들어오면 소개 화면을 보여 준다. 다른 화면은 지금처럼 로그인 화면으로 보낸다.
+  if (pathname === "/") {
+    return NextResponse.redirect(new URL("/intro", request.url));
+  }
 
   // API는 화면 이동 대신 오류로 답한다.
   if (pathname.startsWith("/api/")) {

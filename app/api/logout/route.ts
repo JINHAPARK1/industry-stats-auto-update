@@ -1,4 +1,4 @@
-// Design Ref: §2 폴더와 파일 구조 — `app/api/logout/`은 접속 쿠키를 지워 「나가기」를 처리한다.
+// Design Ref: §2 폴더와 파일 구조 — `app/api/logout/`은 접속 쿠키를 지워 「로그아웃」을 처리한다.
 // Plan SC: PLAN 8번 — 로그인·로그아웃 경로.
 import { authErrorResponse, buildClearCookie, isSameOrigin } from "@/lib/auth";
 
