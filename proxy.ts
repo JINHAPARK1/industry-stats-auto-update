@@ -4,9 +4,10 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { isLoggedIn } from "@/lib/auth";
+import { INTRO_PAGE_PATHS } from "@/lib/intro-pages";
 
-/** 로그인하지 않아도 열 수 있는 주소. 소개 화면, 로그인 화면, 로그인·로그아웃 API뿐이다. (정확히 이 주소만, 하위 주소는 열지 않는다) */
-const PUBLIC_PATHS = new Set(["/intro", "/login", "/api/login", "/api/logout"]);
+/** 로그인하지 않아도 열 수 있는 주소. 소개 화면과 그 세부 화면 5개(lib/intro-content.json), 로그인 화면, 로그인·로그아웃 API뿐이다. (정확히 이 주소만, 하위 주소는 열지 않는다) */
+const PUBLIC_PATHS = new Set(["/intro", ...INTRO_PAGE_PATHS, "/login", "/api/login", "/api/logout"]);
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
