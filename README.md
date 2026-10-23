@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 산업통계 자동 업데이트 시스템
 
-## Getting Started
+재정경제부 산업경제과가 매달 만드는 「산경과 주요 통계」를 자동으로 정리하는 내부용 웹앱입니다.
+KOSIS(국가통계포털)의 공개 통계를 가져와 사람이 확인·확정하고, 확정한 수치만 한글(.hwpx) 서식에 채워 내려받게 합니다.
 
-First, run the development server:
+> **핵심 원칙**: 수치를 확정하는 것은 항상 사람이 합니다. 앱은 가져오고 정리하는 데까지만 합니다.
 
+## 왜 만들었나
+담당 사무관이 여러 통계 사이트를 찾아다니며 최신 수치를 확인하고 한글 서식에 손으로 옮겨 적는 데 매달 약 2일이 걸리고, 옮기는 과정에서 누락·오기·단위 착오가 생길 수 있습니다.
+이 반복 작업을 줄이고, 모든 수치에 출처와 기준시점이 함께 적히게 하는 것이 목표입니다.
+
+## 주요 기능
+| 기능 | 설명 |
+|---|---|
+| 공개 통계 수집·확정 | KOSIS에서 시범 지표 10개를 가져와 전년동월 대비와 이상치를 보여 주고, 사람이 확정합니다. 고친 값은 원래 값과 함께 기록합니다. |
+| 한글 서식 자동 입력 | 확정된 수치와 출처·기준시점을 한글 서식 표에 넣어 내려받습니다. (이번 월 서식, 시계열 추이 서식) |
+| 웹 시각화 | 지표마다 알맞은 선·막대·영역 그래프로 시계열 흐름을 봅니다. |
+| 지표 검색 | 지표 이름으로 확정된 최신 수치를 찾습니다. |
+
+시범 지표 10개: 광공업생산지수(제조업), 반도체 생산지수, 의약품(헬스케어) 생산지수, 설비투자지수(반도체 제조용 기계), 자동차 생산지수, 자동차 설비투자지수, 1차금속 생산지수, 코크스·연탄·석유정제품 생산지수, 제조업 평균가동률, 신생기업 수.
+
+## 믿을 수 있게 하는 규칙
+- 공개 통계(KOSIS)만 다룹니다. 기업 내부 통계 등 대외비는 처리하지 않습니다.
+- 수치를 추정·보정·생성하지 않습니다. 못 가져오면 빈칸과 "수집 실패" 사유를 보여 줍니다.
+- 사람이 확정하기 전의 수치는 한글 서식·검색·그래프에 쓰지 않습니다.
+- 이상치는 표시만 하고 값을 자동으로 바꾸지 않습니다.
+- 통계 수치를 AI 서비스에 보내지 않습니다. (AI는 앱을 만드는 데만 썼습니다)
+- 비밀번호를 입력하기 전에는 통계 화면이 보이지 않습니다. 로그인 전에는 소개 화면과 로그인 화면만 열립니다.
+
+## 기술 스택
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Vercel 배포
+
+## 문서
+- [PRD.md](PRD.md): 서비스 기획서 (문제 정의, 목표, 기능, 범위, 보안)
+- [PLAN.md](PLAN.md): 구현 계획과 진행 현황
+- [CLAUDE.md](CLAUDE.md): 개발 규칙
+
+## 직접 실행해 보기
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev     # http://localhost:3000
+npm run build   # 배포용 빌드
+npm run lint    # 코드 검사
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+프로젝트 루트에 `.env` 파일을 만들고 아래 값을 넣어야 합니다. **값은 저장소에 올리지 마세요.**
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| 변수 | 설명 |
+|---|---|
+| `KOSIS_API_KEY` | KOSIS 인증키 |
+| `APP_PASSWORD` | 접속 비밀번호 (운영에서는 12자 이상, 16자 이상 권장) |
+| `SESSION_SECRET` | 접속 쿠키 서명용 32자 이상의 비밀 글자 |
+| `STORE_BACKEND` | 저장소 종류. 개발 중에는 비워 두면 `.data/store.json` 파일을 쓰고, 운영에서는 배포용 저장소가 정해지기 전까지 저장·조회가 막힙니다. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 현재 상태와 한계
+- 개발용 저장소(파일)로 동작합니다. Vercel에는 파일 저장이 없어서, 배포본에서는 통계 저장·확정 기능이 배포용 저장소가 정해질 때까지 막혀 있습니다. (소개 화면과 로그인 화면은 동작합니다)
+- 한글 서식 파일을 만드는 데 쓰는 한글 기본 틀(`samples/base-template/`)은 사용 조건을 알 수 없어 저장소에 올리지 않았습니다. 그래서 이 저장소를 그대로 받아 실행하면 한글 파일 내려받기는 "서식 틀을 찾을 수 없습니다"로 실패합니다.
+- 내부용 시스템입니다. 소속 부처 정보보안 지침 확인 전에는 실제 업무에 쓰지 않습니다.

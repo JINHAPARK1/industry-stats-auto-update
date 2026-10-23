@@ -1,0 +1,7 @@
+# Vercel CLI로 올릴 때 제외할 것 (비밀 값·개인 데이터·시험 파일)
+.env*
+.data
+samples
+trash-can
+design-samples
+.claude
