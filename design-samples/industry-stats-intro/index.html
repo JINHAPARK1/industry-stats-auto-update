@@ -51,6 +51,18 @@ a{text-decoration:none;color:inherit}  /* REQUIRED - button labels must never un
 .links a{font-size:12.5px;font-weight:400;color:rgba(255,255,255,.92);
   white-space:nowrap;transition:opacity .25s}
 .links a:hover{opacity:.65}
+/* hover dropdown under the nav links (desktop/tablet only; the phone burger menu links straight to each section page) */
+.dd{position:absolute;top:70px;left:0;min-width:200px;padding:8px;border-radius:18px;z-index:500;
+  background:linear-gradient(180deg,rgba(14,19,28,.98),rgba(8,11,17,.99));
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 22px 50px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.05);
+  opacity:0;visibility:hidden;transform:translateY(-6px);
+  transition:opacity .18s ease,transform .2s cubic-bezier(.4,0,.2,1),visibility .2s}
+.dd.show{opacity:1;visibility:visible;transform:none}
+.dd::before{content:"";position:absolute;left:0;right:0;top:-24px;height:24px}
+.dd .dh{padding:4px 12px 6px;font-size:10.5px;font-weight:600;letter-spacing:.06em;color:#8fe3ff}
+.dd a{display:block;padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.35;color:rgba(255,255,255,.92);white-space:nowrap}
+.dd a:hover,.dd a:focus-visible{background:rgba(255,255,255,.08);outline:none}
+@media (max-width:1080px){.dd{display:none}}
 
 /* ===== 3. PIXEL CONTRACT B - THE GLOW BUTTON (.btn), USED TWICE ===== */
 .btn{display:grid;place-items:center;color:#fff;position:relative;overflow:hidden;
@@ -129,7 +141,7 @@ a{text-decoration:none;color:inherit}  /* REQUIRED - button labels must never un
   word-spacing:.1em;color:#fff;
   text-shadow:0 0 34px rgba(130,180,255,.22);z-index:300}
 /* first guesses before the fitter runs (desktop/tablet only: an ID rule would beat the phone's top:auto) */
-@media (min-width:701px){#h1a{top:176px}#h1b{top:230px}#sub1{top:292px}#sub2{top:308px}}
+@media (min-width:701px){#h1a{top:203px}#sub1{top:292px}#sub2{top:308px}}
 .sub{left:586px;transform:translateX(-50%);white-space:nowrap;line-height:1;
   font-size:13.2px;color:#a9aeb5;z-index:300}
 .sub b{font-weight:600;color:#fff}
@@ -357,8 +369,8 @@ html.intro .wa{opacity:0;scale:.88}
   /* 7.4em sits between the width of STREAMLINE (6.36em) and STREAMLINE THE (8.45em),
      so the line break always lands balanced instead of orphaning SHOP */
   .h1{position:relative;left:auto;top:auto;transform:none;white-space:normal;
-    text-align:center;font-size:clamp(29px,8.4vw,36px);line-height:1.06;
-    letter-spacing:-.01em;max-width:7.4em}
+    text-align:center;font-size:clamp(17px,5.4vw,30px);line-height:1.06;white-space:nowrap;
+    letter-spacing:-.01em;max-width:100%}
   .h1.l1{margin-top:clamp(12px,2.2vh,20px)}
   .sub{position:relative;left:auto;top:auto;transform:none;white-space:normal;
     text-align:center;font-size:clamp(14px,3.9vw,15.5px);line-height:1.5;max-width:340px}
@@ -437,16 +449,16 @@ setTimeout(function(){document.documentElement.classList.remove('intro');},4000)
         <button class="burger" id="burger" type="button" aria-label="Opens menu" aria-expanded="false" aria-controls="navmenu"><span></span><span></span><span></span></button>
         <div class="navmenu" id="navmenu">
           <div class="links" id="links">
-            <a href="#">문제</a><a href="#">해결</a><a href="#">핵심 기능</a><a href="#">신뢰·보안</a><a href="#">성공 기준</a>
+            <a href="/intro/problem" data-k="problem">문제</a><a href="/intro/solution" data-k="solution">해결</a><a href="/intro/features" data-k="features">핵심 기능</a><a href="/intro/trust" data-k="trust">신뢰·보안</a><a href="/intro/goals" data-k="goals">성공 기준</a>
           </div>
+          <div class="dd" id="dd" role="menu" aria-hidden="true"></div>
           <a class="btn" href="#"><span id="ctaLabel">앱 열기</span></a>
         </div>
       </nav>
 
       <div class="badge"><i><svg viewBox="5 1 14 22" preserveAspectRatio="none" aria-hidden="true"><path d="M13.9 1.6 5.5 13.6a.7.7 0 0 0 .6 1.1h4.2l-1 7.7a.7.7 0 0 0 1.25.55l8.3-12.1a.7.7 0 0 0-.6-1.1h-4.2l1-7.7a.7.7 0 0 0-1.25-.55Z" fill="rgba(16,112,152,.72)" stroke="rgba(190,236,255,.6)" stroke-width="1.6" stroke-linejoin="round"/></svg></i><b id="badgeTxt">공개 통계만, 사람이 확정</b></div>
 
-      <div class="h1 l1" id="h1a">산업통계 자동 업데이트</div>
-      <div class="h1 l2" id="h1b">시스템</div>
+      <div class="h1 l1" id="h1a">산업통계 자동 업데이트 시스템</div>
       <div class="sub s1" id="sub1"><b>KOSIS 공개 통계를 가져와 / <span class="nb">사람이 확정한 수치만</span></b></div>
       <div class="sub s2" id="sub2">한글 서식에 채워 넣습니다. 산업경제과 7명이 같은 수치를 봅니다.</div>
 
@@ -609,7 +621,7 @@ function centreLabel(btn,el,capPx){
   el.style.top=((btn.offsetHeight/2)-(base-capPx/2)+BIAS)+'px';
 }
 
-var IDS=['h1a','h1b','sub1','sub2','badgeTxt','wmName','ctaLabel','vpLabel'];
+var IDS=['h1a','sub1','sub2','badgeTxt','wmName','ctaLabel','vpLabel'];
 function layout(){
   var g=function(id){return document.getElementById(id)};
   if(phone){
@@ -621,8 +633,7 @@ function layout(){
     placeCards();return;
   }
   var T=tablet?tboost:1;
-  fitFree(g('h1a'),37.2*T,'translateX(-50%)');baseline(g('h1a'),204.5);
-  fitFree(g('h1b'),37.2*T,'translateX(-50%)');baseline(g('h1b'),258.5);
+  fitFree(g('h1a'),37.2*T,'translateX(-50%)');baseline(g('h1a'),231.5);
   fitFree(g('sub1'),8.4*T,'translateX(-50%)');baseline(g('sub1'),300.5);
   fitFree(g('sub2'),8.4*T,'translateX(-50%)');baseline(g('sub2'),316.5);
   fitFree(g('badgeTxt'),9.4*T,'translate(2px,-1px)');
@@ -649,6 +660,30 @@ burger.addEventListener('click',function(e){e.stopPropagation();setMenu(!nav.cla
 document.addEventListener('click',function(e){if(nav.classList.contains('open')&&!nav.contains(e.target))setMenu(false)});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'&&nav.classList.contains('open')){setMenu(false);burger.focus()}});
 links.addEventListener('click',function(e){if(e.target.closest('a'))setMenu(false)});
+
+/* hover dropdown: the sections' items come from lib/intro-content.json (filled in by the generator) */
+var MENU=/*MENU*/[];
+var dd=$('#dd'),ddTimer=0;
+function ddOpen(a){
+  var s=null;for(var i=0;i<MENU.length;i++)if(MENU[i].slug===a.getAttribute('data-k'))s=MENU[i];
+  if(!s||window.innerWidth<=1080)return;
+  clearTimeout(ddTimer);
+  var h='<div class="dh">'+s.label+'</div>';
+  for(var j=0;j<s.items.length;j++)h+='<a role="menuitem" href="/intro/'+s.slug+'#'+s.items[j].id+'">'+s.items[j].heading+'</a>';
+  dd.innerHTML=h;
+  dd.style.left=(links.offsetLeft+a.offsetLeft-12)+'px';
+  dd.classList.add('show');dd.setAttribute('aria-hidden','false');
+}
+function ddClose(){ddTimer=setTimeout(function(){dd.classList.remove('show');dd.setAttribute('aria-hidden','true')},260)}
+Array.prototype.forEach.call(links.children,function(a){
+  a.addEventListener('mouseenter',function(){ddOpen(a)});
+  a.addEventListener('focus',function(){ddOpen(a)});
+  a.addEventListener('mouseleave',ddClose);
+});
+dd.addEventListener('mouseenter',function(){clearTimeout(ddTimer)});
+dd.addEventListener('mouseleave',ddClose);
+nav.addEventListener('focusout',function(e){if(!nav.contains(e.relatedTarget))ddClose()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){clearTimeout(ddTimer);dd.classList.remove('show')}});
 $('#navmenu').addEventListener('click',function(e){if(e.target.closest('.btn'))setMenu(false)});
 
 function resize(){
@@ -741,7 +776,6 @@ requestAnimationFrame(tick);
   /* context, then the message: headline lines WIPE UP out of their own baseline */
   play($('.badge'),{opacity:0,translate:Y(11),scale:.985},560,270,EXPO);
   play($('#h1a'),{opacity:0,translate:Y(15),clipPath:'inset(100% 0 -30% 0)'},900,380,EXPO);
-  play($('#h1b'),{opacity:0,translate:Y(15),clipPath:'inset(100% 0 -30% 0)'},900,470,EXPO);
   play($('#sub1'),{opacity:0,translate:Y(10)},620,690,EXPO);
   play($('#sub2'),{opacity:0,translate:Y(10)},620,745,EXPO);
   play($('.cta2'),{opacity:0,translate:Y(13),scale:.985},620,830,EXPO);

@@ -42,7 +42,7 @@ npm run lint    # 코드 검사 (ESLint)
 - `.env`와 `node_modules`는 `.gitignore`에 등록돼 있다. 이 규칙을 지우지 않는다.
 - 통계 수치를 AI 서비스(외부 API)에 보내는 기능을 만들지 않는다. AI는 앱을 만드는 데만 쓴다.
 - 접근 제한은 공용 비밀번호 1개 방식이다. 비밀번호도 `.env`에 둔다. 비밀번호 확인 전에는 통계 화면을 보이지 않는다.
-- 로그인 없이 열리는 주소는 `proxy.ts`의 `PUBLIC_PATHS`(소개 `/intro`, `/login`, 로그인·로그아웃 API)뿐이다. 더 늘리지 않는다. 소개 화면에는 통계 수치·계정·키·내부 운영 정보를 넣지 않고, 이 주소 전용 CSP(`lib/intro-csp.ts`)로 외부 요청을 막는다.
+- 로그인 없이 열리는 주소는 `proxy.ts`의 `PUBLIC_PATHS`(소개 `/intro`와 소개 세부 화면 5개 `/intro/problem`·`solution`·`features`·`trust`·`goals`, `/login`, 로그인·로그아웃 API)뿐이다. 세부 화면 내용은 `lib/intro-content.json` 한 곳에 두고, 이 5개 외에는 늘리지 않는다. 소개 화면에는 통계 수치·계정·키·내부 운영 정보를 넣지 않고, 이 주소 전용 CSP(`lib/intro-csp.ts`)로 외부 요청을 막는다.
 
 ## 통계 처리 규칙
 - 모든 수치는 **출처(KOSIS 통계표 이름·번호), 기준시점, 단위**와 함께 저장하고 보여준다.
