@@ -768,6 +768,9 @@ requestAnimationFrame(tick);
   play($('.browser'),{opacity:0,translate:Y(26)},900,900,EXPO);
   play($('.wa'),{opacity:0,scale:.88},500,1260,EXPO);
   if(lastAnim){lastAnim.finished.then(settle,settle)}else{settle()}
+  /* failsafe: if frames never tick (hidden pane, throttled tab) the animations would hold the
+     invisible "from" state forever, so force the settled design after the head script's 4s timer */
+  setTimeout(settle,4300);
 })();
 })();
 </script>
