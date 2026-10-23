@@ -129,13 +129,81 @@ class FileBackend implements StoreBackend {
   }
 }
 
+/** 다른 곳에서 먼저 저장해서 내가 읽은 뒤로 값이 바뀌었을 때 (SupabaseBackend 안에서만 쓴다) */
+class RevisionConflict extends Error {}
+
+/**
+ * 배포용 Supabase 저장소. `app_store` 표의 한 줄(id=1)에 전체 값을 JSON으로 저장한다.
+ * - 서버 전용 키(SUPABASE_SERVICE_ROLE_KEY)로만 접근한다. 표는 행 보안(RLS)이 켜져 있고 공개 접근 규칙이 없다.
+ * - 저장할 때 "내가 읽은 번호(rev)와 같을 때만" 고친다. 두 사람이 동시에 확정해도 한쪽 값이 조용히 덮어써지지 않는다.
+ */
+class SupabaseBackend implements StoreBackend {
+  private readonly url = process.env.SUPABASE_URL;
+  private readonly key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  /** 읽어 온 값마다 그때의 번호를 기억해 둔다. */
+  private readonly revisions = new WeakMap<StoreFile, number>();
+
+  constructor() {
+    if (!this.url || !this.key) {
+      throw new StoreError("not-configured", "저장소가 설정되지 않았습니다. 운영자에게 알려 주세요.");
+    }
+  }
+
+  private async call(query: string, init?: RequestInit): Promise<Response> {
+    try {
+      return await fetch(`${this.url}/rest/v1/app_store?${query}`, {
+        ...init,
+        cache: "no-store",
+        headers: {
+          apikey: this.key!,
+          Authorization: `Bearer ${this.key}`,
+          "Content-Type": "application/json",
+          ...init?.headers,
+        },
+      });
+    } catch {
+      throw new StoreError("io", "저장소에 연결하지 못했습니다. 운영자에게 알려 주세요.");
+    }
+  }
+
+  async read(): Promise<StoreFile> {
+    const response = await this.call("id=eq.1&select=rev,data");
+    if (!response.ok) throw new StoreError("io", "저장된 값을 읽지 못했습니다. 운영자에게 알려 주세요.");
+    const rows = (await response.json()) as { rev: number; data: StoreFile }[];
+    const row = rows[0];
+    if (!row) throw new StoreError("io", "저장된 값을 찾지 못했습니다. 운영자에게 알려 주세요.");
+    const data = row.data;
+    if (data?.version !== 1 || typeof data.records !== "object" || typeof data.history !== "object") {
+      throw new StoreError("io", "저장된 값이 손상되어 읽을 수 없습니다. 운영자에게 알려 주세요.");
+    }
+    this.revisions.set(data, Number(row.rev));
+    return data;
+  }
+
+  async write(file: StoreFile): Promise<void> {
+    const rev = this.revisions.get(file);
+    if (rev === undefined) throw new StoreError("io", "저장하지 못했습니다. 운영자에게 알려 주세요.");
+    const response = await this.call(`id=eq.1&rev=eq.${rev}`, {
+      method: "PATCH",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({ data: file, rev: rev + 1, updated_at: new Date().toISOString() }),
+    });
+    if (!response.ok) throw new StoreError("io", "저장하지 못했습니다. 운영자에게 알려 주세요.");
+    const rows = (await response.json()) as unknown[];
+    // 고친 줄이 없다 = 그사이 다른 곳에서 먼저 저장했다.
+    if (rows.length === 0) throw new RevisionConflict();
+  }
+}
+
 /**
  * 쓸 저장소를 고른다.
+ * - STORE_BACKEND=supabase 이면 배포용 Supabase 저장소.
  * - STORE_BACKEND=file 이면 파일 저장소. 설정이 없으면 개발 중에만 파일 저장소를 쓴다.
  * - 배포(운영) 환경에서 설정이 없으면 막는다.
  */
 function getBackend(): StoreBackend {
   const mode = process.env.STORE_BACKEND ?? (process.env.NODE_ENV === "production" ? "" : "file");
+  if (mode === "supabase") return new SupabaseBackend();
   // 운영(Vercel)에서는 파일 저장이 사라지거나 실패하므로 파일 저장소를 쓰지 못하게 막는다.
   if (mode === "file" && process.env.NODE_ENV !== "production") return new FileBackend();
   throw new StoreError("not-configured", "저장소가 설정되지 않았습니다. 운영자에게 알려 주세요.");
@@ -161,10 +229,20 @@ function readOnly<T>(use: (file: StoreFile) => T): Promise<T> {
 function mutate<T>(change: (file: StoreFile) => T): Promise<T> {
   return exclusive(async () => {
     const backend = getBackend();
-    const file = await backend.read();
-    const result = change(file);
-    await backend.write(file);
-    return result;
+    // 다른 곳에서 먼저 저장했으면(RevisionConflict) 새로 읽어서 처음부터 다시 적용한다. 검사(이미 확정 등)도 새 값으로 다시 한다.
+    for (let attempt = 1; ; attempt++) {
+      const file = await backend.read();
+      const result = change(file);
+      try {
+        await backend.write(file);
+        return result;
+      } catch (error) {
+        if (!(error instanceof RevisionConflict)) throw error;
+        if (attempt >= 5) {
+          throw new StoreError("io", "다른 곳에서 동시에 저장하고 있어요. 잠시 뒤 다시 시도해 주세요.");
+        }
+      }
+    }
   });
 }
 
